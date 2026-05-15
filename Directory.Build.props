@@ -5,4 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <TplQueuePackageVersion Condition="'$(TplQueuePackageVersion)' == ''">0.1.0-preview.1</TplQueuePackageVersion>
   </PropertyGroup>
+  <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+    <PackageReference Include="coverlet.collector" Version="6.0.0" />
+  </ItemGroup>
 </Project>

@@ -46,6 +46,7 @@ Commands:
 ```powershell
 .\build.ps1
 .\test.ps1
+.\coverage.ps1 -EnforceBaseline
 ```
 
 More detail is in [docs/local-development.md](docs/local-development.md).
@@ -71,5 +72,6 @@ This repository currently uses local PowerShell workflows:
 
 - [build.ps1](build.ps1) restores and builds the sample and test projects
 - [test.ps1](test.ps1) restores and runs the package-consumption test projects
+- [coverage.ps1](coverage.ps1) collects deterministic coverage for the package-consumption harness and can enforce the accepted baseline
 
-Those workflows are designed to work against the local preview feed during development and against published packages later.
+Those workflows are designed to work against the local preview feed during development and against published packages later. Coverage artifacts are written under `artifacts/coverage/`, including `artifacts/coverage/html/index.html` when the standard `ReportGenerator` tool is available, while the release-facing baseline record is maintained in `..\WorkspaceTplQueue\docs\test-coverage.md`.

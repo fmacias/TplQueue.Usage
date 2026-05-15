@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Format>cobertura</Format>
+          <ExcludeByAttribute>CompilerGeneratedAttribute,ExcludeFromCodeCoverageAttribute,GeneratedCodeAttribute,ObsoleteAttribute</ExcludeByAttribute>
+          <ExcludeByFile>**/bin/**,**/obj/**,**/*.designer.cs,**/*.g.cs,**/*.g.i.cs</ExcludeByFile>
+          <Include>[Fmacias.TplQueue*]*,[Fmacias.TplQueue.Usage.Integration.Test*]*</Include>
+          <IncludeTestAssembly>true</IncludeTestAssembly>
+          <SingleHit>false</SingleHit>
+          <SkipAutoProps>true</SkipAutoProps>
+          <UseSourceLink>false</UseSourceLink>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

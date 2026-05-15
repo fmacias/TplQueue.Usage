@@ -12,21 +12,22 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             harness.ResetLogs();
 
             var result = await harness.RunAsync("wait");
+            var appLog = await harness.WaitForLogContainsAsync(
+                "app.log",
+                "Standalone helper operation executed outside the job graph.");
+            var queueLog = await harness.WaitForLogContainsAsync(
+                "queue.log",
+                "Queue 'greetings-pipeline' created with max parallelism 1.");
+            var observerLog = await harness.WaitForLogContainsAsync(
+                "logging-observer.log",
+                "Finalized 'Standalone helper task'");
 
             Assert.That(result.ExitCode, Is.EqualTo(0), result.ToAssertionMessage());
             StringAssert.Contains("Serialized JSON output:", result.StandardOutput);
-            StringAssert.Contains(
-                "Standalone helper operation executed outside the job graph.",
-                harness.ReadLog("app.log"));
-            StringAssert.Contains(
-                "Queue 'greetings-pipeline' created with max parallelism 1.",
-                harness.ReadLog("queue.log"));
-            StringAssert.Contains(
-                "Root Finalized 'Load'",
-                harness.ReadLog("logging-observer.log"));
-            StringAssert.Contains(
-                "Finalized 'Standalone helper task'",
-                harness.ReadLog("logging-observer.log"));
+            StringAssert.Contains("Standalone helper operation executed outside the job graph.", appLog);
+            StringAssert.Contains("Queue 'greetings-pipeline' created with max parallelism 1.", queueLog);
+            StringAssert.Contains("Root Finalized 'Load'", observerLog);
+            StringAssert.Contains("Finalized 'Standalone helper task'", observerLog);
             Assert.That(harness.GetLogLength("profiling-observer.log"), Is.GreaterThan(0L));
         }
 
@@ -37,27 +38,21 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             harness.ResetLogs();
 
             var result = await harness.RunAsync("cancel");
+            var appLog = await harness.WaitForLogContainsAsync(
+                "app.log",
+                "Queue finalized gracefully.");
+            var observerLog = await harness.WaitForLogContainsAsync(
+                "logging-observer.log",
+                "Finalized 'Standalone helper task'");
 
             Assert.That(result.ExitCode, Is.EqualTo(0), result.ToAssertionMessage());
             StringAssert.DoesNotContain("Serialized JSON output:", result.StandardOutput);
-            StringAssert.Contains(
-                "Canceling the workflow during Extract.",
-                harness.ReadLog("app.log"));
-            StringAssert.Contains(
-                "Standalone helper operation executed outside the job graph.",
-                harness.ReadLog("app.log"));
-            StringAssert.Contains(
-                "Canceled 'Extract'",
-                harness.ReadLog("logging-observer.log"));
-            StringAssert.Contains(
-                "Finalized 'Standalone helper task'",
-                harness.ReadLog("logging-observer.log"));
-            StringAssert.DoesNotContain(
-                "Root Finalized 'Load'",
-                harness.ReadLog("logging-observer.log"));
-            StringAssert.Contains(
-                "Queue finalized gracefully.",
-                harness.ReadLog("app.log"));
+            StringAssert.Contains("Canceling the workflow during Extract.", appLog);
+            StringAssert.Contains("Standalone helper operation executed outside the job graph.", appLog);
+            StringAssert.Contains("Canceled 'Extract'", observerLog);
+            StringAssert.Contains("Finalized 'Standalone helper task'", observerLog);
+            StringAssert.DoesNotContain("Root Finalized 'Load'", observerLog);
+            StringAssert.Contains("Queue finalized gracefully.", appLog);
         }
 
         private sealed class QueueObserverConsoleHarness
@@ -137,6 +132,37 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             {
                 var path = Path.Combine(GetLogDirectory(), fileName);
                 return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+            }
+
+            public async Task<string> WaitForLogContainsAsync(
+                string fileName,
+                string expectedText,
+                TimeSpan? timeout = null)
+            {
+                if (string.IsNullOrWhiteSpace(fileName))
+                {
+                    throw new ArgumentException("A log file name is required.", nameof(fileName));
+                }
+
+                if (string.IsNullOrWhiteSpace(expectedText))
+                {
+                    throw new ArgumentException("An expected log message is required.", nameof(expectedText));
+                }
+
+                var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+
+                while (DateTime.UtcNow <= deadline)
+                {
+                    var log = ReadLog(fileName);
+                    if (log.Contains(expectedText, StringComparison.Ordinal))
+                    {
+                        return log;
+                    }
+
+                    await Task.Delay(100).ConfigureAwait(false);
+                }
+
+                return ReadLog(fileName);
             }
 
             public long GetLogLength(string fileName)
