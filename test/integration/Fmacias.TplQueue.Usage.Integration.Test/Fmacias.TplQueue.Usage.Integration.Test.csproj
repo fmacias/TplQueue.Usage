@@ -21,5 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\samples\QueueObserverConsole\QueueObserverConsole.csproj"
                       ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\samples\QueueObserverSignalRDashboard\QueueObserverSignalRDashboard.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

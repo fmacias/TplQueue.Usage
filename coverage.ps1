@@ -18,7 +18,10 @@ $reportRoot = Join-Path $artifactsRoot "reports"
 $htmlRoot = Join-Path $artifactsRoot "html"
 $summaryPath = Join-Path $artifactsRoot "coverage-summary.json"
 $configFile = Join-Path $root "NuGet.config"
-$sampleProject = Join-Path $root "samples\QueueObserverConsole\QueueObserverConsole.csproj"
+$sampleProjects = @(
+    (Join-Path $root "samples\QueueObserverConsole\QueueObserverConsole.csproj"),
+    (Join-Path $root "samples\QueueObserverSignalRDashboard\QueueObserverSignalRDashboard.csproj")
+)
 $testProject = Join-Path $root "test\integration\Fmacias.TplQueue.Usage.Integration.Test\Fmacias.TplQueue.Usage.Integration.Test.csproj"
 $reportPath = Join-Path $reportRoot "Fmacias.TplQueue.Usage.PackageConsumption.cobertura.xml"
 
@@ -149,17 +152,22 @@ New-Item -ItemType Directory -Path $rawRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $reportRoot -Force | Out-Null
 
 if (-not $NoRestore) {
-    Invoke-Dotnet -DotnetArgs (@("restore", $sampleProject, "--configfile", $configFile, "--ignore-failed-sources") + $versionArgs)
+    foreach ($sampleProject in $sampleProjects) {
+        Invoke-Dotnet -DotnetArgs (@("restore", $sampleProject, "--configfile", $configFile, "--ignore-failed-sources") + $versionArgs)
+    }
+
     Invoke-Dotnet -DotnetArgs (@("restore", $testProject, "--configfile", $configFile, "--ignore-failed-sources") + $versionArgs)
 }
 
 if (-not $NoBuild) {
-    $buildArgs = @("build", $sampleProject, "--configuration", $Configuration) + $versionArgs
-    if ($NoRestore) {
-        $buildArgs += "--no-restore"
-    }
+    foreach ($sampleProject in $sampleProjects) {
+        $buildArgs = @("build", $sampleProject, "--configuration", $Configuration) + $versionArgs
+        if ($NoRestore) {
+            $buildArgs += "--no-restore"
+        }
 
-    Invoke-Dotnet -DotnetArgs $buildArgs
+        Invoke-Dotnet -DotnetArgs $buildArgs
+    }
 }
 
 $dotnetArgs = @(

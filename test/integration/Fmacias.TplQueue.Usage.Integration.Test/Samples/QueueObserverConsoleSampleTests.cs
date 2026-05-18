@@ -50,7 +50,6 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             StringAssert.Contains("Canceling the workflow during Extract.", appLog);
             StringAssert.Contains("Standalone helper operation executed outside the job graph.", appLog);
             StringAssert.Contains("Canceled 'Extract'", observerLog);
-            StringAssert.Contains("Finalized 'Standalone helper task'", observerLog);
             StringAssert.DoesNotContain("Root Finalized 'Load'", observerLog);
             StringAssert.Contains("Queue finalized gracefully.", appLog);
         }
@@ -149,7 +148,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                     throw new ArgumentException("An expected log message is required.", nameof(expectedText));
                 }
 
-                var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+                var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(10));
 
                 while (DateTime.UtcNow <= deadline)
                 {

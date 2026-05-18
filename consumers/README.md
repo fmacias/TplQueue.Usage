@@ -6,4 +6,9 @@ This folder is reserved for representative consumer surfaces that exercise TplQu
 - observer-driven diagnostics surfaces
 - facility or scenario harnesses that prove integration expectations
 
-The initial `TPLQ-V1-006` scaffold keeps the main runnable sample in [samples/QueueObserverConsole](../samples/QueueObserverConsole/README.md) and the validation surface under `test/`.
+The runnable consumer samples currently live in [samples/QueueObserverConsole](../samples/QueueObserverConsole/README.md) and [samples/QueueObserverSignalRDashboard](../samples/QueueObserverSignalRDashboard/README.md), with the validation surface under `test/`.
+
+The first consumer-owned remote-observer projection for `TPLQ-V1-008` lives in the integration project under `test/integration/.../Consumers/JobEventTransport/`.
+It demonstrates a SignalR-style transport DTO that keeps the public queue event feed metadata-only by default and captures serialized payload snapshots explicitly instead of forwarding the live backend payload object.
+
+That same explicit projection idea is now exercised in the runnable SignalR dashboard sample through a second long-lived payload queue that publishes detached DataJob snapshots to the browser.

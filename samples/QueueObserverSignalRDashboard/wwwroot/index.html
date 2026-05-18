@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Queue Observer SignalR Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+    <main class="shell">
+        <section class="hero">
+            <p class="eyebrow">TplQueue.Usage Sample</p>
+            <h1>Queue Observer SignalR Dashboard</h1>
+            <p class="lead">
+                Two long-lived queues share one host: a metadata queue and a payload queue that transports detached JSON snapshots for DataJob events.
+            </p>
+            <div class="action-groups">
+                <div class="action-group">
+                    <span class="group-label">Metadata Queue</span>
+                    <div class="actions">
+                        <button id="wait-run" class="primary">Start Wait Run</button>
+                        <button id="cancel-run" class="secondary">Start Cancel Run</button>
+                    </div>
+                </div>
+                <div class="action-group">
+                    <span class="group-label">Payload Queue</span>
+                    <div class="actions">
+                        <button id="payload-wait-run" class="primary accent-alt">Start Payload Wait</button>
+                        <button id="payload-cancel-run" class="secondary accent-soft">Start Payload Cancel</button>
+                    </div>
+                </div>
+            </div>
+            <p id="status-line" class="status-line">Connecting to the SignalR dashboard...</p>
+        </section>
+
+        <section class="grid">
+            <article class="panel">
+                <div class="panel-header">
+                    <h2>Runs</h2>
+                    <span id="active-run-pill" class="pill">No active run</span>
+                </div>
+                <div id="runs" class="run-list"></div>
+            </article>
+
+            <article class="panel">
+                <div class="panel-header">
+                    <h2>Projected QueueEventDto Stream</h2>
+                    <span class="hint">Click a row to inspect payload JSON</span>
+                </div>
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Scenario</th>
+                                <th>Status</th>
+                                <th>Job</th>
+                                <th>Payload</th>
+                                <th>Retry</th>
+                                <th>Queue</th>
+                                <th>Timestamp (UTC)</th>
+                                <th>Exception</th>
+                            </tr>
+                        </thead>
+                        <tbody id="events"></tbody>
+                    </table>
+                </div>
+            </article>
+
+            <article class="panel inspector">
+                <div class="panel-header">
+                    <h2>Selected Payload Snapshot</h2>
+                    <span id="payload-badge" class="hint">Click an event row</span>
+                </div>
+                <p id="payload-meta" class="inspector-meta">
+                    The payload queue publishes detached JSON snapshots on terminal DataJob events.
+                </p>
+                <pre id="payload-content" class="payload-content">No payload snapshot selected.</pre>
+            </article>
+        </section>
+    </main>
+
+    <script src="https://cdn.jsdelivr.net/npm/@microsoft/signalr@8.0.7/dist/browser/signalr.min.js"></script>
+    <script src="/app.js"></script>
+</body>
+</html>

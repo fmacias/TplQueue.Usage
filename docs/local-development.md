@@ -27,7 +27,7 @@ When the preview line changes later, update that property in this repository so 
 2. Run `.\build.ps1`.
 3. Run `.\test.ps1` to execute the package-based integration suite adapted from `TplQueue.Core`.
 
-The current integration suite also builds and launches the `QueueObserverConsole` sample in its documented `wait` and `cancel` modes, so the sample remains part of the public verification surface instead of drifting away from the documented behavior.
+The current integration suite also builds and launches the `QueueObserverConsole` sample in its documented `wait` and `cancel` modes, and it launches the `QueueObserverSignalRDashboard` sample through its HTTP surface. Both samples remain part of the public verification surface instead of drifting away from the documented behavior.
 
 Typical pack entry points in the workspace:
 

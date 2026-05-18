@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<greetings>
+  <greeting language="en">Hello from TplQueue</greeting>
+  <greeting language="es">Hola desde TplQueue</greeting>
+  <greeting language="de">Hallo aus TplQueue</greeting>
+</greetings>

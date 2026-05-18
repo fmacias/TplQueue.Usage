@@ -10,6 +10,7 @@ $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $configFile = Join-Path $root "NuGet.config"
 $projects = @(
     (Join-Path $root "samples\QueueObserverConsole\QueueObserverConsole.csproj"),
+    (Join-Path $root "samples\QueueObserverSignalRDashboard\QueueObserverSignalRDashboard.csproj"),
     (Join-Path $root "test\integration\Fmacias.TplQueue.Usage.Integration.Test\Fmacias.TplQueue.Usage.Integration.Test.csproj")
 )
 

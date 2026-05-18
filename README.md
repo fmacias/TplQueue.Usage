@@ -17,6 +17,7 @@ It exists to show how consumers use the published binaries without requiring acc
 - [docs/source-access-boundary.md](docs/source-access-boundary.md)
 - [docs/local-development.md](docs/local-development.md)
 - [samples/QueueObserverConsole](samples/QueueObserverConsole/README.md)
+- [samples/QueueObserverSignalRDashboard](samples/QueueObserverSignalRDashboard/README.md)
 - [test/integration/Fmacias.TplQueue.Usage.Integration.Test](test/integration/Fmacias.TplQueue.Usage.Integration.Test)
 - [consumers/README.md](consumers/README.md)
 
@@ -65,6 +66,7 @@ More detail is in [docs/local-development.md](docs/local-development.md).
 - queue creation through the adapter `API` facade
 - rooted job-graph execution through public packages
 - a runnable console sample with documented `wait` and `cancel` modes that acts as the facility-style consumer example surface
+- a runnable SignalR dashboard sample that registers two long-lived queues through `Fmacias.TplQueue.Microsoft.DependencyInjection`, including a payload queue that projects detached JSON snapshots for `IDataJob` events
 
 ## Build and test workflow
 
