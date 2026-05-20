@@ -31,8 +31,8 @@ The default local preview line is controlled by `TplQueuePackageVersion` in [Dir
 To validate a different package line without editing the repo, override the property at build or test time:
 
 ```powershell
-.\build.ps1 -TplQueuePackageVersion 0.1.0-preview.2
-.\test.ps1 -TplQueuePackageVersion 0.1.0-preview.2
+.\build.ps1 -TplQueuePackageVersion <version>
+.\test.ps1 -TplQueuePackageVersion <version>
 ```
 
 ## Local development

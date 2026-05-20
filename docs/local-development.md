@@ -41,8 +41,8 @@ Typical pack entry points in the workspace:
 You can override the consumed package line at command time:
 
 ```powershell
-.\build.ps1 -TplQueuePackageVersion 0.1.0-preview.2
-.\test.ps1 -TplQueuePackageVersion 0.1.0-preview.2
+.\build.ps1 -TplQueuePackageVersion <version>
+.\test.ps1 -TplQueuePackageVersion <version>
 ```
 
 That keeps the committed default stable while letting you validate a different package set.
