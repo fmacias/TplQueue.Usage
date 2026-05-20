@@ -9,6 +9,7 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $configFile = Join-Path $root "NuGet.config"
 $sampleProjects = @(
+    (Join-Path $root "samples\PackageConsumptionSmokeConsole\PackageConsumptionSmokeConsole.csproj"),
     (Join-Path $root "samples\QueueObserverConsole\QueueObserverConsole.csproj"),
     (Join-Path $root "samples\QueueObserverSignalRDashboard\QueueObserverSignalRDashboard.csproj")
 )

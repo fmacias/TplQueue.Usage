@@ -16,6 +16,7 @@ It exists to show how consumers use the published binaries without requiring acc
 - [docs/overview.md](docs/overview.md)
 - [docs/source-access-boundary.md](docs/source-access-boundary.md)
 - [docs/local-development.md](docs/local-development.md)
+- [samples/PackageConsumptionSmokeConsole](samples/PackageConsumptionSmokeConsole/README.md)
 - [samples/QueueObserverConsole](samples/QueueObserverConsole/README.md)
 - [samples/QueueObserverSignalRDashboard](samples/QueueObserverSignalRDashboard/README.md)
 - [test/integration/Fmacias.TplQueue.Usage.Integration.Test](test/integration/Fmacias.TplQueue.Usage.Integration.Test)
@@ -60,11 +61,18 @@ More detail is in [docs/local-development.md](docs/local-development.md).
 - the repository does not require private `TplQueue.Core` project references
 - restricted source access stays outside this repository and is documented in [docs/source-access-boundary.md](docs/source-access-boundary.md)
 
+## License
+
+`TplQueue.Usage` is distributed under the MIT license.
+
+That repository license covers the consumer documentation, samples, and package-consumption test harness published here. It does not change the separate package-license terms of `TplQueue.Core`, which remain governed by the Core repository `LICENSE.txt` and the corresponding NuGet package metadata.
+
 ## Current validation surface
 
 - adapted integration tests moved from `TplQueue.Core`
 - queue creation through the adapter `API` facade
 - rooted job-graph execution through public packages
+- a small release-smoke console sample with one simple mode per package-consumption checklist scenario
 - a runnable console sample with documented `wait` and `cancel` modes that acts as the facility-style consumer example surface
 - a runnable SignalR dashboard sample that registers two long-lived queues through `Fmacias.TplQueue.Microsoft.DependencyInjection`, including a payload queue that projects detached JSON snapshots for `IDataJob` events
 

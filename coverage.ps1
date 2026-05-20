@@ -19,6 +19,7 @@ $htmlRoot = Join-Path $artifactsRoot "html"
 $summaryPath = Join-Path $artifactsRoot "coverage-summary.json"
 $configFile = Join-Path $root "NuGet.config"
 $sampleProjects = @(
+    (Join-Path $root "samples\PackageConsumptionSmokeConsole\PackageConsumptionSmokeConsole.csproj"),
     (Join-Path $root "samples\QueueObserverConsole\QueueObserverConsole.csproj"),
     (Join-Path $root "samples\QueueObserverSignalRDashboard\QueueObserverSignalRDashboard.csproj")
 )

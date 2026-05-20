@@ -280,6 +280,10 @@ namespace TplQueue.Usage.QueueObserverConsole
             if (logger == null) throw new ArgumentNullException(nameof(logger));
             
             await q.Wait().ConfigureAwait(false);
+            // The queue has drained, but observer publication is asynchronous.
+            // Give the observer hub a short grace period so terminal log lines
+            // are flushed before this console process exits.
+            await Task.Delay(200).ConfigureAwait(false);
             logger.LogInformation("Queue finalized gracefully.");
         }
 
