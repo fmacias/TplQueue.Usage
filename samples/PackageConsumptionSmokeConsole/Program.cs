@@ -144,7 +144,6 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
             using var queue = CreateParallelQueue(api, "job-root-queue", maxParallelism: 1);
             queue.Enqueue(root, CancellationToken.None);
 
-            await root.WaitUntilFinishedAsync().ConfigureAwait(false);
             await queue.Wait().ConfigureAwait(false);
 
             Ensure(
@@ -252,7 +251,6 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
                 retryPolicyFactory: () => new CountingRetryPolicy(() => Interlocked.Increment(ref dispatcherPolicyInvocations)));
             queue.Enqueue(root, CancellationToken.None);
 
-            await root.WaitUntilFinishedAsync().ConfigureAwait(false);
             await queue.Wait().ConfigureAwait(false);
 
             Ensure(completed, "The retry scenario never reached a successful completion.");
@@ -278,7 +276,6 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
             using var subscription = queue.Subscribe(observer);
             queue.Enqueue(root, CancellationToken.None);
 
-            await root.WaitUntilFinishedAsync().ConfigureAwait(false);
             await queue.Wait().ConfigureAwait(false);
             // Queue finalization happens before the observer hub flushes every event to subscribers.
             await Task.Delay(200).ConfigureAwait(false);
@@ -324,7 +321,6 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
             using var queue = CreateParallelQueue(api, "payload-cache-queue", maxParallelism: 1);
             queue.Enqueue(hydratedRoot, CancellationToken.None);
 
-            await hydratedRoot.WaitUntilFinishedAsync().ConfigureAwait(false);
             await queue.Wait().ConfigureAwait(false);
 
             Ensure(
