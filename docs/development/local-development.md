@@ -4,7 +4,7 @@
 
 ## Package source
 
-The repository uses [NuGet.config](../NuGet.config) with two sources:
+The repository uses [NuGet.config](../../NuGet.config) with two sources:
 
 - `..\TplQueue.NugetLocal`
 - `nuget.org`
@@ -13,7 +13,7 @@ During current workspace development, the local feed is expected to provide the 
 
 ## Current default version
 
-The default package line is defined in [Directory.Build.props](../Directory.Build.props):
+The default package line is defined in [Directory.Build.props](../../Directory.Build.props):
 
 ```xml
 <TplQueuePackageVersion>0.1.0-preview.1</TplQueuePackageVersion>
