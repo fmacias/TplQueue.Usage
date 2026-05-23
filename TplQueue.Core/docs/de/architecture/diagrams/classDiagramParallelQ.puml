@@ -1,0 +1,35 @@
+@startuml
+top to bottom direction
+skinparam linetype ortho
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+package "TplQueue.Abstractions" <<External>> {
+  interface IJobRoot
+
+  interface IParallelQ {
+    +Enqueue(...) : IParallelQ
+    +EnqueueFifo(...) : IParallelQ
+  }
+}
+
+package "TplQueue.Core" {
+  abstract class QAbstract
+
+  class JobRoot {
+    +Create(...) : JobRoot
+  }
+
+  class ParallelQ {
+    +Create(...) : IParallelQ
+    +Enqueue(...) : IParallelQ
+    +EnqueueFifo(...) : IParallelQ
+  }
+}
+
+ParallelQ --|> QAbstract
+ParallelQ ..|> IParallelQ
+ParallelQ ..> JobRoot : Create()
+ParallelQ ..> IJobRoot : Enqueue(jobRoot)
+@enduml

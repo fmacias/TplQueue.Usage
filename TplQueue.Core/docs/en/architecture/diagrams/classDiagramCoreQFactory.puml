@@ -1,0 +1,37 @@
+@startuml
+top to bottom direction
+skinparam linetype ortho
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+package "TplQueue.Abstractions" <<External>> {
+  interface IQFactory {
+    +Parallel(...) : IParallelQ
+    +Fifo(...) : IFifoQ
+    +CacheQ(...) : ICacheQ
+  }
+
+  interface IParallelQ
+  interface IFifoQ
+  interface ICacheQ
+}
+
+package "TplQueue.Core" {
+  class CoreQFactory {
+    +Create() : IQFactory
+    +Parallel(...) : IParallelQ
+    +Fifo(...) : IFifoQ
+    +CacheQ(...) : ICacheQ
+  }
+
+  class ParallelQ
+  class FifoQ
+  class CacheQ
+}
+
+CoreQFactory ..|> IQFactory
+CoreQFactory ..> ParallelQ : creates
+CoreQFactory ..> FifoQ : creates
+CoreQFactory ..> CacheQ : creates
+@enduml

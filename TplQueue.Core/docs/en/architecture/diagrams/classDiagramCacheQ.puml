@@ -1,0 +1,36 @@
+@startuml
+top to bottom direction
+skinparam linetype ortho
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+package "TplQueue.Abstractions" <<External>> {
+  interface ICacheQ
+  interface IDataJobCache
+}
+
+package "TplQueue.Core" {
+  class AsyncAutoResetEvent {
+    +WaitAsync(cancellationToken = default) : Task
+    +Set() : void
+  }
+
+  class ParallelQAdapter
+
+  class CacheQ {
+    +LeasingPulseMs : int
+    +Create(logger, cache, queue) : CacheQ
+    +Enqueue(jobRoot, ct) : ICacheQ
+    +EnqueueFifo(jobRoot, ct) : ICacheQ
+    +ResumePolling() : void
+    +Pause() : void
+    +Dispose() : void
+  }
+}
+
+CacheQ --|> ParallelQAdapter
+CacheQ ..|> ICacheQ
+CacheQ o-- IDataJobCache : lease cache
+CacheQ *-- AsyncAutoResetEvent : lease signal
+@enduml

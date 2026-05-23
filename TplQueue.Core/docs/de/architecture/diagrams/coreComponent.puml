@@ -1,0 +1,72 @@
+@startuml
+top to bottom direction
+skinparam linetype ortho
+skinparam shadowing false
+skinparam packageStyle rectangle
+skinparam componentStyle uml2
+hide circle
+
+component "consumer" as Consumer <<external>>
+
+package "TplQueue.Abstractions" as Abstractions <<External>> {
+  interface ICoreApi
+  interface IQFactory
+  interface IJobFactory
+  interface IDataJobFactory
+  interface IParallelQ
+  interface IFifoQ
+  interface ICacheQ
+  interface IDataJobCache
+}
+
+package "TplQueue.Core" as Core {
+  component CoreApi
+
+  package "Factories" {
+    component CoreQFactory
+    component JobFactory
+    component DataJobFactory
+  }
+
+  package "Execution" {
+    component JobGraph
+    component QueueOrchestration
+  }
+
+  package "Queues" {
+    component ParallelQ
+    component FifoQ
+    component CacheQ
+  }
+}
+
+Consumer --> ICoreApi : binds
+CoreApi - ICoreApi
+
+CoreApi *--> CoreQFactory
+CoreApi *--> JobFactory
+CoreApi *--> DataJobFactory
+
+CoreQFactory - IQFactory
+JobFactory - IJobFactory
+DataJobFactory - IDataJobFactory
+
+CoreQFactory --> ParallelQ : creates
+CoreQFactory --> FifoQ : creates
+CoreQFactory --> CacheQ : creates
+
+JobFactory --> JobGraph : creates jobs
+DataJobFactory --> JobGraph : creates data jobs
+
+QueueOrchestration *--> JobGraph
+QueueOrchestration *--> ParallelQ
+QueueOrchestration *--> FifoQ
+QueueOrchestration *--> CacheQ
+
+ParallelQ - IParallelQ
+FifoQ - IFifoQ
+CacheQ - ICacheQ
+CacheQ o--> IDataJobCache : leases
+
+Core ..> Abstractions : depends on contracts
+@enduml

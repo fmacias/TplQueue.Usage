@@ -1,0 +1,41 @@
+@startuml
+top to bottom direction
+skinparam linetype ortho
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+package "TplQueue.Abstractions" <<External>> {
+  interface ICoreApi {
+    +QFactory : IQFactory
+    +JobFactory : IJobFactory
+    +DataJobFactory : IDataJobFactory
+  }
+
+  interface IQFactory
+  interface IJobFactory
+  interface IDataJobFactory
+}
+
+package "TplQueue.Core" {
+  class CoreApi {
+    +Create() : ICoreApi
+    +QFactory : IQFactory
+    +JobFactory : IJobFactory
+    +DataJobFactory : IDataJobFactory
+  }
+
+  class CoreQFactory
+  class JobFactory
+  class DataJobFactory
+}
+
+CoreApi ..|> ICoreApi
+CoreApi *-- IQFactory : owns
+CoreApi *-- IJobFactory : owns
+CoreApi *-- IDataJobFactory : owns
+
+CoreApi ..> CoreQFactory : Create()
+CoreApi ..> JobFactory : Create()
+CoreApi ..> DataJobFactory : Create()
+@enduml

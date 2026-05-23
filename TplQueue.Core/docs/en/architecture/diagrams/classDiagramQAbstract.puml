@@ -1,0 +1,58 @@
+@startuml
+top to bottom direction
+skinparam linetype ortho
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+hide circle
+
+package "TplQueue.Abstractions" <<External>> {
+  interface IQ {
+    +ResumePolling() : void
+    +Pause() : void
+    +Enqueue(jobRoot, ct) : IQ
+    +Wait() : Task
+    +SetRetryPolicyFactory(retryPolicy) : IQ
+    +Subscribe(observer) : IDisposable
+  }
+
+  interface IJobEvent
+}
+
+package "TplQueue.Core" {
+  class JobObserverHub {
+    +JobObserverHub(logger)
+    +Subscribe(observer) : IDisposable
+    +Publish(evt, onObserverError) : void
+    +PublishError(ex, onObserverError) : void
+    +Dispose() : void
+  }
+
+  class "AsyncOrderedQueue<IJobNode>" as AsyncOrderedQueueOfJobNode {
+    +Enqueue(item, jobRootId, isFifo, queueId, cancellationToken) : bool
+    +DequeueAsync(cancellationToken) : Task<(IJobNode, Guid, CancellationToken, bool)>
+  }
+
+  abstract class QAbstract {
+    +Name
+    +MaxParallelism
+    +RetryPolicyFactory
+    +Semaphore
+    +IsDisposed
+    +OnJobEventChanged
+    +QueueId
+    +ResumePolling() : void
+    +Pause() : void
+    +Subscribe(observer) : IDisposable
+    +Enqueue(jobRoot, ct) : IQ
+    +Dispose() : void
+    +Wait() : Task
+    +SetRetryPolicyFactory(retryPolicy) : IQ
+  }
+}
+
+QAbstract ..|> IQ
+QAbstract *-- AsyncOrderedQueueOfJobNode
+QAbstract *-- JobObserverHub
+
+JobObserverHub ..> IJobEvent
+@enduml
