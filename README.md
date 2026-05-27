@@ -7,7 +7,6 @@ It is the canonical consumer-facing sample and verification surface for the publ
 ## What this repository owns
 
 - public package-consumption documentation
-- the public `TplQueue.Core` documentation source tree mirrored by `fmacias.github.io`
 - runnable consumer samples
 - package-based integration tests adapted from the private source layout
 - public observer, DTO transport, and payload-projection examples
@@ -22,18 +21,11 @@ Repository-level documentation now lives under [docs/](docs/index.md):
 - [Operations](docs/operations/index.md)
 - [Full reference](docs/reference.md)
 
-The public `Core Engine` source-of-truth tree now lives under `TplQueue.Core/docs/` in this repository:
+Private `TplQueue.Core` documentation now lives in the private `TplQueue.Core` repository and is no longer maintained in this public repository.
 
-- [English landing page](TplQueue.Core/docs/en/index.md)
-- [German landing page](TplQueue.Core/docs/de/index.md)
-- [English usage](TplQueue.Core/docs/en/usage/index.md)
-- [English architecture](TplQueue.Core/docs/en/architecture/index.md)
-- [English development](TplQueue.Core/docs/en/development/index.md)
-- [English operations](TplQueue.Core/docs/en/operations/index.md)
-- [English full reference](TplQueue.Core/docs/en/reference.md)
-- [English license model](TplQueue.Core/docs/en/license.md)
+This repository focuses on runnable package-consumption samples, public integration coverage, and validation flows for the published packages.
 
-`fmacias.github.io` syncs `TplQueue.Adapter/docs/<lang>/` for the general `TplQueue` branch and `TplQueue.Core/docs/<lang>/` from this repository for the public `Core Engine` and `Core License` pages.
+`fmacias.github.io` syncs the public TplQueue documentation from `TplQueue.Adapter/docs/<lang>/`.
 
 ## Runnable samples
 
