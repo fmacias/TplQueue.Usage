@@ -83,7 +83,7 @@ namespace Fmacias.TplQueue.Integration.Test
                 var observerFactory = api.ObserverFactory();
                 var retryAbstractFactory = api.RetryPolicyAbstractFactory;
                 var qFactory = api.QFactory;
-                var serializer = api.SystemTexSerializerFactory().Serializer();
+                var serializer = api.SystemTextSerializerFactory().Serializer();
                 var memCache = api.Cache<IMemCache>(
                     MemCacheFactory.Create(),
                     serializer,

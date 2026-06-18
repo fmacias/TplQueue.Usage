@@ -124,8 +124,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 "Child payload job");
             
             root.After(child);
-            var rootPayloadJson = SerializePayload(rootPayload);
-            var childPayloadJson = SerializePayload(childPayload);
+            var rootSerializedPayload = SerializePayload(rootPayload);
+            var childSerializedPayload = SerializePayload(childPayload);
             
             _queue.Enqueue(root, CancellationToken.None);
 
@@ -141,8 +141,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo:false,
                 jobRootId: root.Id,
                 parentJobId:Guid.Empty,
-                payloadJson: rootPayloadJson,
-                nameJson: rootPayloadJson,
+                serializedPayload: rootSerializedPayload,
+                nameJson: rootSerializedPayload,
                 entryDeleted:false);
 
             var childEntry = _memCache.GetByJobId(child.Id);
@@ -154,8 +154,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: childPayloadJson,
-                nameJson: childPayloadJson,
+                serializedPayload: childSerializedPayload,
+                nameJson: childSerializedPayload,
                 entryDeleted: false);
         }
 
@@ -177,8 +177,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 "Child payload job");
             
             root.After(child);
-            var rootPayloadJson = root.Serialize(_universalPayloadSerializer);
-            var childPayloadJson = child.Serialize(_universalPayloadSerializer);
+            var rootSerializedPayload = root.Serialize(_universalPayloadSerializer);
+            var childSerializedPayload = child.Serialize(_universalPayloadSerializer);
 
             _queue.Enqueue(root, CancellationToken.None);
 
@@ -191,8 +191,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: rootPayloadJson,
-                nameJson: rootPayloadJson,
+                serializedPayload: rootSerializedPayload,
+                nameJson: rootSerializedPayload,
                 entryDeleted: false);
 
             var childEntry = _memCache.GetByJobId(child.Id);
@@ -205,8 +205,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: childPayloadJson,
-                nameJson: childPayloadJson,
+                serializedPayload: childSerializedPayload,
+                nameJson: childSerializedPayload,
                 entryDeleted:false);
             
             _queue.ResumePolling();
@@ -222,8 +222,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: null,
-                nameJson: rootPayloadJson,
+                serializedPayload: null,
+                nameJson: rootSerializedPayload,
                 entryDeleted:true);
 
 
@@ -235,8 +235,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: null,
-                nameJson: childPayloadJson,
+                serializedPayload: null,
+                nameJson: childSerializedPayload,
                 entryDeleted:true);
         }
         [Test]
@@ -257,8 +257,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 "Child payload job");
 
             root.After(child);
-            var rootPayloadJson = SerializePayload(rootPayload);
-            var childPayloadJson = SerializePayload(childPayload);
+            var rootSerializedPayload = SerializePayload(rootPayload);
+            var childSerializedPayload = SerializePayload(childPayload);
 
             _queue.EnqueueFifo(root, CancellationToken.None);
             Task.Delay(1000).Wait();
@@ -272,8 +272,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: true,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: rootPayloadJson,
-                nameJson: rootPayloadJson,
+                serializedPayload: rootSerializedPayload,
+                nameJson: rootSerializedPayload,
                 entryDeleted:false);
 
             var childEntry = _memCache.GetByJobId(child.Id);
@@ -285,8 +285,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false, // property is only relevant on root objects.
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: childPayloadJson,
-                nameJson: childPayloadJson,
+                serializedPayload: childSerializedPayload,
+                nameJson: childSerializedPayload,
                 entryDeleted:false);
         }
 
@@ -308,8 +308,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 "Child payload job");
 
             root.After(child);
-            var rootPayloadJson = SerializePayload(rootPayload);
-            var childPayloadJson = SerializePayload(childPayload);
+            var rootSerializedPayload = SerializePayload(rootPayload);
+            var childSerializedPayload = SerializePayload(childPayload);
 
             _queue.EnqueueFifo(root, CancellationToken.None);
 
@@ -323,8 +323,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: true,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: rootPayloadJson,
-                nameJson: rootPayloadJson,
+                serializedPayload: rootSerializedPayload,
+                nameJson: rootSerializedPayload,
                 entryDeleted:false);
 
             var childEntry = _memCache.GetByJobId(child.Id);
@@ -336,8 +336,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false, // property is only relevant on root objects.
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: childPayloadJson,
-                nameJson: childPayloadJson,
+                serializedPayload: childSerializedPayload,
+                nameJson: childSerializedPayload,
                 entryDeleted: false);
 
             _queue.ResumePolling();
@@ -350,8 +350,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: true,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: null,
-                nameJson: rootPayloadJson,
+                serializedPayload: null,
+                nameJson: rootSerializedPayload,
                 entryDeleted:true);
 
             AssertCacheLeaseEntry(
@@ -362,8 +362,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: null,
-                nameJson: childPayloadJson,
+                serializedPayload: null,
+                nameJson: childSerializedPayload,
                 entryDeleted:true);
         }
         [Test]
@@ -384,8 +384,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 "Child payload job");
 
             root.After(child);
-            var rootPayloadJson = SerializePayload(rootPayload);
-            var childPayloadJson = SerializePayload(childPayload);
+            var rootSerializedPayload = SerializePayload(rootPayload);
+            var childSerializedPayload = SerializePayload(childPayload);
 
             var cancellationTockenSource = new CancellationTokenSource();
             _queue.EnqueueFifo(root, cancellationTockenSource.Token);
@@ -404,8 +404,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: true,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: rootPayloadJson,
-                nameJson: rootPayloadJson,
+                serializedPayload: rootSerializedPayload,
+                nameJson: rootSerializedPayload,
                 entryDeleted:true);
 
             AssertCacheLeaseEntry(
@@ -416,8 +416,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: childPayloadJson,
-                nameJson: childPayloadJson,
+                serializedPayload: childSerializedPayload,
+                nameJson: childSerializedPayload,
                 entryDeleted:true);
         }
 
@@ -439,8 +439,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 "Child payload job");
 
             root.After(child);
-            var rootPayloadJson = SerializePayload(rootPayload);
-            var childPayloadJson = SerializePayload(childPayload);
+            var rootSerializedPayload = SerializePayload(rootPayload);
+            var childSerializedPayload = SerializePayload(childPayload);
 
             var cancellationTockenSource = new CancellationTokenSource();
             _queue.Enqueue(root, cancellationTockenSource.Token);
@@ -459,8 +459,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: rootPayloadJson,
-                nameJson: rootPayloadJson,
+                serializedPayload: rootSerializedPayload,
+                nameJson: rootSerializedPayload,
                 entryDeleted:true);
 
             AssertCacheLeaseEntry(
@@ -471,8 +471,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: childPayloadJson,
-                nameJson: childPayloadJson,
+                serializedPayload: childSerializedPayload,
+                nameJson: childSerializedPayload,
                 entryDeleted:true);
         }
 
@@ -494,8 +494,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 "Child payload job");
 
             root.After(child);
-            var rootPayloadJson = SerializePayload(rootPayload);
-            var childPayloadJson = SerializePayload(childPayload);
+            var rootSerializedPayload = SerializePayload(rootPayload);
+            var childSerializedPayload = SerializePayload(childPayload);
             var cts = new CancellationTokenSource();
             _queue.LeasingPulseMs = 100;
             _queue.EnqueueFifo(root, cts.Token);
@@ -510,8 +510,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: true,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: rootPayloadJson,
-                nameJson: rootPayloadJson,
+                serializedPayload: rootSerializedPayload,
+                nameJson: rootSerializedPayload,
                 entryDeleted:false);
 
             var childEntry = _memCache.GetByJobId(child.Id);
@@ -523,8 +523,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false, // property is only relevant on root objects.
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: childPayloadJson,
-                nameJson: childPayloadJson,
+                serializedPayload: childSerializedPayload,
+                nameJson: childSerializedPayload,
                 entryDeleted:false);
             
             _queue.ResumePolling();
@@ -538,8 +538,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: true,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: null,
-                nameJson: rootPayloadJson,
+                serializedPayload: null,
+                nameJson: rootSerializedPayload,
                 entryDeleted: true);
 
             AssertCacheLeaseEntry(
@@ -550,8 +550,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: null,
-                nameJson: childPayloadJson,
+                serializedPayload: null,
+                nameJson: childSerializedPayload,
                 entryDeleted:true);
        
             cts.Dispose();
@@ -574,8 +574,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 "Child payload job");
 
             root.After(child);
-            var rootPayloadJson = SerializePayload(rootPayload);
-            var childPayloadJson = SerializePayload(childPayload);
+            var rootSerializedPayload = SerializePayload(rootPayload);
+            var childSerializedPayload = SerializePayload(childPayload);
             var cts = new CancellationTokenSource();
             _queue.LeasingPulseMs = 100;
             _queue.Enqueue(root, cts.Token);
@@ -590,8 +590,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: rootPayloadJson,
-                nameJson: rootPayloadJson,
+                serializedPayload: rootSerializedPayload,
+                nameJson: rootSerializedPayload,
                 entryDeleted:false);
 
             var childEntry = _memCache.GetByJobId(child.Id);
@@ -603,8 +603,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false, // property is only relevant on root objects.
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: childPayloadJson,
-                nameJson: childPayloadJson,
+                serializedPayload: childSerializedPayload,
+                nameJson: childSerializedPayload,
                 entryDeleted:false);
 
             _queue.ResumePolling();
@@ -618,8 +618,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: Guid.Empty,
-                payloadJson: null,
-                nameJson: rootPayloadJson,
+                serializedPayload: null,
+                nameJson: rootSerializedPayload,
                 entryDeleted: true);
 
             AssertCacheLeaseEntry(
@@ -630,8 +630,8 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 isFifo: false,
                 jobRootId: root.Id,
                 parentJobId: root.Id,
-                payloadJson: null,
-                nameJson: childPayloadJson,
+                serializedPayload: null,
+                nameJson: childSerializedPayload,
                 entryDeleted:true);
 
             cts.Dispose();
@@ -641,7 +641,7 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
             IDataJobNode payloadCarrierRunner, bool isRoot, 
             EntryStatus status, bool isFifo,Guid jobRootId, 
             Guid parentJobId,
-            string? payloadJson,
+            string? serializedPayload,
             string nameJson,
             bool entryDeleted)
         {
@@ -654,9 +654,9 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
             Assert.That(entry.JobNodeRecordDto.ParentJobId, Is.EqualTo(parentJobId));
             Assert.That(entry.JobNodeRecordDto.JobId, Is.EqualTo(payloadCarrierRunner.Id));
             Assert.That(entry.JobNodeRecordDto.Name, Is.EqualTo(payloadCarrierRunner.Name));
-            if (payloadJson != null)
+            if (serializedPayload != null)
             {
-                Assert.That(entry.JobNodeRecordDto.PayloadJson, Is.EqualTo(payloadJson));
+                Assert.That(entry.JobNodeRecordDto.SerializedPayload, Is.EqualTo(serializedPayload));
             }
             Assert.That(entry.Deleted, Is.EqualTo(entryDeleted));
         }

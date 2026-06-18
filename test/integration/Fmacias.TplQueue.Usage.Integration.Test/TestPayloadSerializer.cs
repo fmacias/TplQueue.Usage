@@ -32,17 +32,17 @@ namespace Fmacias.TplQueue.Integration.Test
                     nameof(value));
             }
 
-            var payloadJson = JsonSerializer.Serialize(value, type, _options);
+            var serializedPayload = JsonSerializer.Serialize(value, type, _options);
 
             if (typeof(IPayload).IsAssignableFrom(type))
             {
                 var typeName = type.AssemblyQualifiedName ?? type.FullName ?? type.Name;
-                using var doc = JsonDocument.Parse(payloadJson);
+                using var doc = JsonDocument.Parse(serializedPayload);
                 var envelope = new PayloadEnvelope(typeName, doc.RootElement.Clone());
                 return JsonSerializer.Serialize(envelope, _options);
             }
 
-            return payloadJson;
+            return serializedPayload;
         }
 
         public object Deserialize(string json, Type type)

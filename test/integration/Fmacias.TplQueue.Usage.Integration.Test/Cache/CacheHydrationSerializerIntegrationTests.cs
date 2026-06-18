@@ -59,8 +59,8 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
                 Assert.That(rootEntry.JobNodeRecordDto.PayloadHandlerKey, Is.EqualTo(rootPayload.PayloadId));
                 Assert.That(childEntry.JobNodeRecordDto.PayloadHandlerKey, Is.EqualTo(childPayload.PayloadId));
                 Assert.That(typeResolver.ResolvedPayloadTypeNames, Has.Exactly(2).EqualTo(typeof(IntegrationPayload).AssemblyQualifiedName));
-                PayloadSerializationAssert.MatchesSerializer(serializerName, rootEntry.JobNodeRecordDto.PayloadJson);
-                PayloadSerializationAssert.MatchesSerializer(serializerName, childEntry.JobNodeRecordDto.PayloadJson);
+                PayloadSerializationAssert.MatchesSerializer(serializerName, rootEntry.JobNodeRecordDto.SerializedPayload);
+                PayloadSerializationAssert.MatchesSerializer(serializerName, childEntry.JobNodeRecordDto.SerializedPayload);
                 Assert.That(hydratedRootPayload.PayloadId, Is.EqualTo(rootPayload.PayloadId));
                 Assert.That(hydratedRootPayload.Name, Is.EqualTo(rootPayload.Name));
                 Assert.That(hydratedRootPayload.Value, Is.EqualTo(rootPayload.Value));
@@ -84,7 +84,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
             var root = api.DataJobFactory.DataJobRoot(payload, handler, "root");
             var cache = api.Cache(
                 MemCacheFactory.Create(),
-                api.SystemTexSerializerFactory().Serializer(),
+                api.SystemTextSerializerFactory().Serializer(),
                 RuntimeNodeTypeResolverFactory.Create().Resolver());
 
             cache.Dehydrate(root, isFifo: false);
@@ -98,7 +98,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
         {
             if (serializerName == JsonSerializerName)
             {
-                return api.SystemTexSerializerFactory().Serializer();
+                return api.SystemTextSerializerFactory().Serializer();
             }
 
             if (serializerName == XmlSerializerName)

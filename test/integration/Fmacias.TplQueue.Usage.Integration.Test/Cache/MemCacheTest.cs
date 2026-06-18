@@ -34,7 +34,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
                 queueOptions,
                 registration);
             _dataJobFactory = _api.DataJobFactory;
-            _universalPayloadSerializer = _api.SystemTexSerializerFactory().Serializer();
+            _universalPayloadSerializer = _api.SystemTextSerializerFactory().Serializer();
         }
 
         private class DummyPayload : IPayload

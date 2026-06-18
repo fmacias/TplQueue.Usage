@@ -1,4 +1,4 @@
-﻿using Fmacias.TplQueue.Cache.MemCache;
+using Fmacias.TplQueue.Cache.MemCache;
 using Fmacias.TplQueue.Contracts;
 using Fmacias.TplQueue.Defaults;
 using Fmacias.TplQueue.Integration.Test.PayloadJobs;
@@ -27,7 +27,7 @@ namespace Fmacias.TplQueue.Integration.Test.Contracts
                 { "main", new IntegrationDispatcherOptions(Guid.NewGuid(), maxParallelism: 2, pulseMs: 5, retryPolicy: "no-retry") }
             };
             _api = Helper.GetApi(_retryPolicyOptions, _queueOptions);
-            _serializerFactory = _api.SystemTexSerializerFactory();
+            _serializerFactory = _api.SystemTextSerializerFactory();
             _coreQFactories = _api.QFactory;
         }
 

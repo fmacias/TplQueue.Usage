@@ -60,7 +60,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
                 registration);
             _retryPolicyFactory = _api.RetryPolicyAbstractFactory;
             _dataJobFactory = _api.DataJobFactory;
-            _serializer = _api.SystemTexSerializerFactory().Serializer();
+            _serializer = _api.SystemTextSerializerFactory().Serializer();
         }
 
         [Test]

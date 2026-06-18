@@ -69,16 +69,16 @@ namespace Fmacias.TplQueue.Integration.Test
         }
 
         [Test]
-        public void SystemTextJsonSerializerFactory_LegacyTypo_ReturnsSameSerializerType()
+        public void SystemTextJsonSerializerFactory_RepeatedCalls_ReturnSameSerializerType()
         {
             var api = Helper.GetApi(
                 new Dictionary<string, IRetryPolicyOptions>(),
                 new Dictionary<string, IQOptions>());
 
-            var correctedSerializer = api.SystemTextSerializerFactory().Serializer();
-            var legacySerializer = api.SystemTexSerializerFactory().Serializer();
+            var firstSerializer = api.SystemTextSerializerFactory().Serializer();
+            var secondSerializer = api.SystemTextSerializerFactory().Serializer();
 
-            Assert.That(legacySerializer.GetType(), Is.EqualTo(correctedSerializer.GetType()));
+            Assert.That(secondSerializer.GetType(), Is.EqualTo(firstSerializer.GetType()));
         }
 
         public sealed class JsonIntegrationPayload : IPayload

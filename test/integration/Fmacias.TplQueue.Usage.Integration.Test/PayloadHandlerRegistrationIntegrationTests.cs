@@ -37,7 +37,7 @@ namespace Fmacias.TplQueue.Integration.Test
                 () => NoRetryPolicy.Create());
             var cache = api.Cache<IMemCache>(
                 MemCacheFactory.Create(),
-                api.SystemTexSerializerFactory().Serializer());
+                api.SystemTextSerializerFactory().Serializer());
 
             cache.Dehydrate(root, isFifo: false);
 

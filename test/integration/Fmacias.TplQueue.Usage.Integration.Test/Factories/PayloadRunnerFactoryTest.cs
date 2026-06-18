@@ -157,7 +157,7 @@ namespace Fmacias.TplQueue.Integration.Test.Factories
         /// </summary>
         /// <returns></returns>
         [Test]
-        public async Task GetPayloadRunnerFactory_ProducesExecutableRunners()
+        public async Task GetPayloadJobFactory_ProducesExecutableRunners()
         {
             //Arrange
             var payload = new RecordingPayload("Recording-Dummy-Name");
