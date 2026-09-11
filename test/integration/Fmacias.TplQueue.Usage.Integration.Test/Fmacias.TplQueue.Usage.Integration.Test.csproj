@@ -8,6 +8,7 @@
   <ItemGroup>
     <PackageReference Include="Fmacias.TplQueue" Version="$(TplQueuePackageVersion)" />
     <PackageReference Include="Fmacias.TplQueue.Core" Version="$(TplQueuePackageVersion)" />
+    <PackageReference Include="Fmacias.TplQueue.Microsoft.DependencyInjection" Version="$(TplQueuePackageVersion)" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.8" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="NUnit" Version="3.14.0" />
@@ -19,9 +20,41 @@
   </ItemGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\samples\TplQueue.Sample.Etl.Contracts\TplQueue.Sample.Etl.Contracts.csproj" />
+    <ProjectReference Include="..\..\..\samples\TplQueue.Sample.Etl\TplQueue.Sample.Etl.csproj" />
     <ProjectReference Include="..\..\..\samples\QueueObserverConsole\QueueObserverConsole.csproj"
                       ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\..\samples\QueueObserverSignalRDashboard\QueueObserverSignalRDashboard.csproj"
                       ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\TplQueue.Sample.BlazorSignalR.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\ILegacyMeasurementCollector.cs"
+             Link="Samples\ILegacyMeasurementCollector.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\ILegacyMeasurementScenario.cs"
+             Link="Samples\ILegacyMeasurementScenario.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\LegacyMeasurementScenario.cs"
+             Link="Samples\LegacyMeasurementScenario.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\LegacyMeasurementCollector.cs"
+             Link="Samples\LegacyMeasurementCollector.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\EtlQueueObserver.cs"
+             Link="Samples\EtlQueueObserver.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\EtlDashboardSnapshot.cs"
+             Link="Samples\EtlDashboardSnapshot.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\EtlExecutionProjectionStore.cs"
+             Link="Samples\EtlExecutionProjectionStore.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\EtlQueueCatalog.cs"
+             Link="Samples\EtlQueueCatalog.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\IEtlExecutionProjectionStore.cs"
+             Link="Samples\IEtlExecutionProjectionStore.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\TimelineDtos.cs"
+             Link="Samples\TimelineDtos.cs" />
+  </ItemGroup>
+
 </Project>

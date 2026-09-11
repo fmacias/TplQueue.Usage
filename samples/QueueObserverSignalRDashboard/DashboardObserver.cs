@@ -1,5 +1,4 @@
 using Fmacias.TplQueue.Contracts;
-using Microsoft.Extensions.Logging;
 
 namespace TplQueue.Usage.QueueObserverSignalRDashboard;
 

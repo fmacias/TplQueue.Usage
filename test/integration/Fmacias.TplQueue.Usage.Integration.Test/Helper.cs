@@ -57,7 +57,7 @@ namespace Fmacias.TplQueue.Integration.Test
                 if (payload == null) throw new ArgumentNullException(nameof(payload));
 
                 PayloadType = payload.GetType();
-                PayloadHandlerKey = payload.PayloadId;
+                PayloadHandlerKey = payload.HandlerKey;
                 HandlerCallback = payloadHandler ?? throw new ArgumentNullException(nameof(payloadHandler));
             }
 

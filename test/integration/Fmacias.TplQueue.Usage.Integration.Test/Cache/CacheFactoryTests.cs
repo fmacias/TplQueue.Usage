@@ -12,6 +12,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
         private readonly DateTime _collectionTime;
         public string Name { get; init; }
         public string PayloadId => "recording";
+        public string HandlerKey => "recording";
         public bool Executed { get; init; }
         public DateTime CollectionTime => _collectionTime;
 
@@ -109,7 +110,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
             var rootPayload = new RecordingPayload("root");
             var root = _dataJobFactory.DataJobRoot(
                 rootPayload,
-                _payloadHandlerResolver.Handler(rootPayload.PayloadId),
+                _payloadHandlerResolver.Handler(rootPayload.HandlerKey),
                 "root",
                 () => _retryPolicyFactory.PolicyByName("none", _retryPolicyOptions)
             );

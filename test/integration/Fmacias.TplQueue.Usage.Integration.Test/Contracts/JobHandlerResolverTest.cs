@@ -55,7 +55,7 @@ namespace Fmacias.TplQueue.Integration.Test.Contracts
                 mesDto,
                 CancellationToken.None);
             queue.ResumePolling();
-            await queue.Wait();
+            await queue.WaitAsync();
             Assert.AreEqual(0, mesDto.Temperature, "Payload input is immutable.");
             Assert.AreEqual(true, executed);
         }
@@ -78,7 +78,7 @@ namespace Fmacias.TplQueue.Integration.Test.Contracts
                 measurementDto,
                 CancellationToken.None);
             queue.ResumePolling();
-            await queue.Wait();
+            await queue.WaitAsync();
             Assert.AreEqual(0, measurementDto.TemperatureCelsius, "Payload input is immutable.");
             Assert.That(executed, Is.True);
         }
@@ -152,12 +152,12 @@ namespace Fmacias.TplQueue.Integration.Test.Contracts
 
             var measurementPayloadJob = factory.DataJobRoot(
                 temperaturePayloadDto,
-                jobHandlerResolver.Handler(temperaturePayloadDto.PayloadId),
+                jobHandlerResolver.Handler(temperaturePayloadDto.HandlerKey),
                 retryPolicy: () => NoRetryPolicy.Create());
            
             using var queue = api.QFactory.CacheQ(
+                () => memCache,
                 Helper.GetLogger<ICacheQ>(),
-                memCache,
                 _coreQFactories.Parallel("main", Helper.GetLogger<IParallelQ>())
             );
             queue.Enqueue<CelsiusStructPayload>(measurementPayloadJob, CancellationToken.None);

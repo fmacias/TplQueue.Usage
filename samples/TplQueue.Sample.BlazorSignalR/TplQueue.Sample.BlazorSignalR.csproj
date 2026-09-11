@@ -1,0 +1,15 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\TplQueue.Adapter\src\Fmacias.TplQueue.Microsoft.DependencyInjection\Fmacias.TplQueue.Microsoft.DependencyInjection.csproj" />
+    <ProjectReference Include="..\..\..\TplQueue.Core\src\Fmacias.TplQueue.Core\Fmacias.TplQueue.Core.csproj" />
+    <ProjectReference Include="..\TplQueue.Sample.Etl.Contracts\TplQueue.Sample.Etl.Contracts.csproj" />
+    <ProjectReference Include="..\TplQueue.Sample.Etl\TplQueue.Sample.Etl.csproj" />
+  </ItemGroup>
+</Project>

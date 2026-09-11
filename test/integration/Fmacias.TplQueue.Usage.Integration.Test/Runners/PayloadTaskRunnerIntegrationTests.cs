@@ -66,7 +66,7 @@ namespace Fmacias.TplQueue.Integration.Test.Runners
             var payload = new DummyPayload(execution, "payload");
             var child = _dataJobFactory.DataJobRoot(
                 payload,
-                _handlerResolver.Handler(payload.PayloadId),
+                _handlerResolver.Handler(payload.HandlerKey),
                 name: "payload-node",
                 retryPolicy: () => NoRetryPolicy.Create());
 
@@ -110,7 +110,7 @@ logger: _logger, retryPolicyFactory: dispatcherPolicy);
             var payload = new DummyPayload(new List<string>(), "root-payload");
             var root = _dataJobFactory.DataJobRoot(
                 payload,
-                _handlerResolver.Handler(payload.PayloadId),
+                _handlerResolver.Handler(payload.HandlerKey),
                 "payload-root",
                 rootPolicy);
 
@@ -131,6 +131,7 @@ logger: _logger, retryPolicyFactory: dispatcherPolicy);
             }
 
             public string PayloadId => "payload-handler";
+            public string HandlerKey => "payload-handler";
             public IList<string> Execution { get; }
             public string Marker { get; }
 

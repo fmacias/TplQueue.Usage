@@ -144,7 +144,7 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
             using var queue = CreateParallelQueue(api, "job-root-queue", maxParallelism: 1);
             queue.Enqueue(root, CancellationToken.None);
 
-            await queue.Wait().ConfigureAwait(false);
+            await queue.WaitAsync().ConfigureAwait(false);
 
             Ensure(
                 executionOrder.SequenceEqual(new[] { "child", "root" }),
@@ -178,7 +178,7 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
                 CancellationToken.None,
                 name: "parallel-second");
 
-            await queue.Wait().ConfigureAwait(false);
+            await queue.WaitAsync().ConfigureAwait(false);
             stopwatch.Stop();
 
             Ensure(
@@ -220,7 +220,7 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
                 CancellationToken.None,
                 name: "fifo-third");
 
-            await queue.Wait().ConfigureAwait(false);
+            await queue.WaitAsync().ConfigureAwait(false);
 
             Ensure(
                 executionOrder.SequenceEqual(new[] { "first", "second", "third" }),
@@ -251,7 +251,7 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
                 retryPolicyFactory: () => new CountingRetryPolicy(() => Interlocked.Increment(ref dispatcherPolicyInvocations)));
             queue.Enqueue(root, CancellationToken.None);
 
-            await queue.Wait().ConfigureAwait(false);
+            await queue.WaitAsync().ConfigureAwait(false);
 
             Ensure(completed, "The retry scenario never reached a successful completion.");
             Ensure(rootPolicyInvocations >= 1, "The retry scenario did not execute the root-specific retry policy.");
@@ -276,7 +276,7 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
             using var subscription = queue.Subscribe(observer);
             queue.Enqueue(root, CancellationToken.None);
 
-            await queue.Wait().ConfigureAwait(false);
+            await queue.WaitAsync().ConfigureAwait(false);
             // Queue finalization happens before the observer hub flushes every event to subscribers.
             await Task.Delay(200).ConfigureAwait(false);
 
@@ -321,7 +321,7 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
             using var queue = CreateParallelQueue(api, "payload-cache-queue", maxParallelism: 1);
             queue.Enqueue(hydratedRoot, CancellationToken.None);
 
-            await queue.Wait().ConfigureAwait(false);
+            await queue.WaitAsync().ConfigureAwait(false);
 
             Ensure(
                 executions.SequenceEqual(new[] { "payload-cache-ok" }),
@@ -431,6 +431,7 @@ namespace TplQueue.Usage.PackageConsumptionSmokeConsole
 
             public string Label { get; set; } = string.Empty;
             public string PayloadId => PayloadHandlerKey;
+            public string HandlerKey => PayloadHandlerKey;
             public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
         }
 

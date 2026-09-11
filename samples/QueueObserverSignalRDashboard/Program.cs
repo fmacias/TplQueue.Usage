@@ -1,10 +1,12 @@
-using Microsoft.AspNetCore.SignalR;
+using Fmacias.TplQueue.Core;
 using TplQueue.Usage.QueueObserverSignalRDashboard;
+using Fmacias.TplQueue.Microsoft.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddSignalR();
-builder.Services.AddDashboardSample(builder.Configuration);
+builder.Services.AddTplQueue(builder.Configuration, CoreApi.Create());
+builder.Services.AddDashboardSample();
 
 var app = builder.Build();
 

@@ -69,6 +69,7 @@ namespace Fmacias.TplQueue.Integration.Test
 
             public string Label { get; set; } = string.Empty;
             public string PayloadId => PayloadHandlerKey;
+            public string HandlerKey => PayloadHandlerKey;
             public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
         }
 

@@ -13,6 +13,7 @@ namespace Fmacias.TplQueue.Integration.Test.PayloadJobs
         }
 
         public string PayloadId { get; init; }
+        public string HandlerKey => StableHandlerId.ToString();
         public double Temperature { get; init; }
         public DateTime CollectionTime { get; init; }
         public bool Executed { get; init; }

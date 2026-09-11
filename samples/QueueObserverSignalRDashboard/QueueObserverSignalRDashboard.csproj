@@ -4,11 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-
   <ItemGroup>
-    <PackageReference Include="Fmacias.TplQueue" Version="$(TplQueuePackageVersion)" />
-    <PackageReference Include="Fmacias.TplQueue.Core" Version="$(TplQueuePackageVersion)" />
-    <PackageReference Include="Fmacias.TplQueue.Microsoft.DependencyInjection" Version="$(TplQueuePackageVersion)" />
+    <ProjectReference Include="..\..\..\TplQueue.Adapter\src\Fmacias.TplQueue.Microsoft.DependencyInjection\Fmacias.TplQueue.Microsoft.DependencyInjection.csproj" />
+    <ProjectReference Include="..\..\..\TplQueue.Core\src\Fmacias.TplQueue.Core\Fmacias.TplQueue.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -94,14 +94,14 @@ namespace Fmacias.TplQueue.Integration.Test
                 var payloadJobChild = api.DataJobFactory
                     .DataJob(
                         childPayload,
-                        recordingPayloadHandlerResolver.Handler(childPayload.PayloadId),
+                        recordingPayloadHandlerResolver.Handler(childPayload.HandlerKey),
                         "child-name"
                     );
 
                 var payloadJobRoot = api.DataJobFactory
                     .DataJobRoot(
                         rootPayload,
-                        recordingPayloadHandlerResolver.Handler(rootPayload.PayloadId),
+                        recordingPayloadHandlerResolver.Handler(rootPayload.HandlerKey),
                         "root-name",
                         () => retryAbstractFactory.PolicyByName("no-retry", _retryPolicyOptions)
                     );
@@ -204,6 +204,7 @@ namespace Fmacias.TplQueue.Integration.Test
             public static ConcurrentQueue<string> Executions { get; } = new ConcurrentQueue<string>();
             public string Label { get; init; } = string.Empty;
             public string PayloadId => "recording";
+            public string HandlerKey => "recording";
 
             public DateTime CollectionTime => DateTime.UtcNow;
         }

@@ -141,7 +141,7 @@ namespace Fmacias.TplQueue.Integration.Test.Factories
             var payloadInstance = childLeaseEntry.JobNodeRecordDto.Deserialize<FakePayload>(_universalPayloadSerializer);
             var payloadDataJob = _payloadJobFactory.DataJob(
                 payloadInstance,
-                jobHandlerResolver.Handler(payloadInstance.PayloadId),
+                jobHandlerResolver.Handler(payloadInstance.HandlerKey),
                 childLeaseEntry.JobNodeRecordDto.Name
             );
             Assert.That(payloadDataJob, Is.Not.Null);
@@ -180,7 +180,7 @@ namespace Fmacias.TplQueue.Integration.Test.Factories
             var dataJobFactory = api.DataJobFactory;
             var payloadJobRoot = dataJobFactory.DataJobRoot(
                 payload, 
-                handlerResolver.Handler(payload.PayloadId), 
+                handlerResolver.Handler(payload.HandlerKey),
                 "payload",
                 () => _retryPolicyGenericFactory.PolicyByName("none", _retryPolicyOptions)
             );
@@ -222,7 +222,7 @@ namespace Fmacias.TplQueue.Integration.Test.Factories
             var dataJobFactory = api.DataJobFactory;
             var payloadChildJob = dataJobFactory.DataJob<RecordingPayload>(
                 payload,
-                handlerResolver.Handler(payload.PayloadId),
+                handlerResolver.Handler(payload.HandlerKey),
                 "payload-child"
             );
             var info = payloadChildJob.CopyInfo();
@@ -232,6 +232,8 @@ namespace Fmacias.TplQueue.Integration.Test.Factories
     }
     internal sealed class FakePayload : IPayload
     {
+        private const string PayloadHandlerKey = "test/integration/fake-payload-v1";
+
         public FakePayload(string payloadId)
         {
             PayloadId = payloadId;
@@ -243,6 +245,7 @@ namespace Fmacias.TplQueue.Integration.Test.Factories
         }
 
         public string PayloadId { get; init; }
+        public string HandlerKey => PayloadHandlerKey;
         [JsonIgnore]
         public int X { get; init; }
         public DateTime CollectionTime => DateTime.UtcNow;

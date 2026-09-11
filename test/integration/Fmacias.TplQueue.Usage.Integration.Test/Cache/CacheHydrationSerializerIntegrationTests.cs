@@ -28,8 +28,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
             var api = Helper.GetApi(
                 new Dictionary<string, IRetryPolicyOptions>(),
                 new Dictionary<string, IQOptions>(),
-                new Helper.HandlerRegistration(rootPayload, handler),
-                new Helper.HandlerRegistration(childPayload, handler));
+                new Helper.HandlerRegistration(rootPayload, handler));
             var root = api.DataJobFactory.DataJobRoot(rootPayload, handler, "root");
             var child = api.DataJobFactory.DataJob(childPayload, handler, "child");
             root.After(child);
@@ -56,15 +55,17 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
                 Assert.That(lease, Is.SameAs(rootEntry));
                 Assert.That(rootEntry.JobNodeRecordDto.PayloadTypeName, Is.EqualTo(typeof(IntegrationPayload).AssemblyQualifiedName));
                 Assert.That(childEntry.JobNodeRecordDto.PayloadTypeName, Is.EqualTo(typeof(IntegrationPayload).AssemblyQualifiedName));
-                Assert.That(rootEntry.JobNodeRecordDto.PayloadHandlerKey, Is.EqualTo(rootPayload.PayloadId));
-                Assert.That(childEntry.JobNodeRecordDto.PayloadHandlerKey, Is.EqualTo(childPayload.PayloadId));
+                Assert.That(rootEntry.JobNodeRecordDto.PayloadHandlerKey, Is.EqualTo(rootPayload.HandlerKey));
+                Assert.That(childEntry.JobNodeRecordDto.PayloadHandlerKey, Is.EqualTo(childPayload.HandlerKey));
                 Assert.That(typeResolver.ResolvedPayloadTypeNames, Has.Exactly(2).EqualTo(typeof(IntegrationPayload).AssemblyQualifiedName));
                 PayloadSerializationAssert.MatchesSerializer(serializerName, rootEntry.JobNodeRecordDto.SerializedPayload);
                 PayloadSerializationAssert.MatchesSerializer(serializerName, childEntry.JobNodeRecordDto.SerializedPayload);
                 Assert.That(hydratedRootPayload.PayloadId, Is.EqualTo(rootPayload.PayloadId));
+                Assert.That(hydratedRootPayload.HandlerKey, Is.EqualTo(rootPayload.HandlerKey));
                 Assert.That(hydratedRootPayload.Name, Is.EqualTo(rootPayload.Name));
                 Assert.That(hydratedRootPayload.Value, Is.EqualTo(rootPayload.Value));
                 Assert.That(hydratedChildPayload.PayloadId, Is.EqualTo(childPayload.PayloadId));
+                Assert.That(hydratedChildPayload.HandlerKey, Is.EqualTo(childPayload.HandlerKey));
                 Assert.That(hydratedChildPayload.Name, Is.EqualTo(childPayload.Name));
                 Assert.That(hydratedChildPayload.Value, Is.EqualTo(childPayload.Value));
             });
@@ -91,7 +92,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
 
             var exception = Assert.Throws<KeyNotFoundException>(() =>
                 cache.TryHydrateNextJob(out _, out _));
-            Assert.That(exception!.Message, Does.Contain(payload.PayloadId));
+            Assert.That(exception!.Message, Does.Contain(payload.HandlerKey));
         }
 
         private static IUniversalDataSerializer CreateSerializer(IApi api, string serializerName)
@@ -125,6 +126,8 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
 
         public sealed class IntegrationPayload : IPayload
         {
+            public const string PayloadHandlerKey = "test/integration/cache-hydration-v1";
+
             public IntegrationPayload()
             {
                 PayloadId = string.Empty;
@@ -141,6 +144,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
             }
 
             public string PayloadId { get; set; }
+            public string HandlerKey => PayloadHandlerKey;
             public string Name { get; set; }
             public int Value { get; set; }
             public DateTime CollectionTime { get; set; }

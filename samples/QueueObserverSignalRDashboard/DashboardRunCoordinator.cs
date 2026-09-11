@@ -1,6 +1,5 @@
 using Fmacias.TplQueue.Contracts;
-using Fmacias.TplQueue.Core.Jobs;
-using Microsoft.Extensions.Logging;
+using Fmacias.TplQueue.Extensions;
 
 namespace TplQueue.Usage.QueueObserverSignalRDashboard;
 
@@ -171,7 +170,6 @@ internal sealed class DashboardRunCoordinator
             PublishDashboardSummary,
             state,
             context,
-            _metadataQueue.CreateRetryPolicyFactory(),
             name: "PublishDashboardSummary");
 
         collect.Then(transform).Then(publish);
@@ -196,7 +194,7 @@ internal sealed class DashboardRunCoordinator
         }
         else
         {
-            await queue.Wait().ConfigureAwait(false);
+            await queue.WaitAsync().ConfigureAwait(false);
             await _notifier.PublishRunAsync(
                 CloneRun(
                     run,
@@ -216,7 +214,7 @@ internal sealed class DashboardRunCoordinator
         var queue = _payloadQueue.Queue;
         var workflow = _payloadWorkflowFactory.Create(
             run.RunId,
-            _payloadQueue.CreateRetryPolicyFactory());
+            _payloadQueue.GetQueueRetryPolicyDelegate());
         var projector = new QueueEventProjector(
             run.RunId,
             run.Scenario,
@@ -259,7 +257,7 @@ internal sealed class DashboardRunCoordinator
         }
         else
         {
-            await queue.Wait().ConfigureAwait(false);
+            await queue.WaitAsync().ConfigureAwait(false);
             await _notifier.PublishRunAsync(
                 CloneRun(
                     run,
@@ -356,7 +354,7 @@ internal sealed class DashboardRunCoordinator
 
         logger.LogWarning("Canceling the dashboard pipeline during CollectDashboardRows.");
         workflowCancellation.Cancel();
-        await queue.Wait().ConfigureAwait(false);
+            await queue.WaitAsync().ConfigureAwait(false);
     }
 
     private static async Task CancelDuringPayloadExtractAsync(
@@ -379,7 +377,7 @@ internal sealed class DashboardRunCoordinator
 
         logger.LogWarning("Canceling the payload dashboard pipeline during Payload Extract.");
         workflowCancellation.Cancel();
-        await queue.Wait().ConfigureAwait(false);
+        await queue.WaitAsync().ConfigureAwait(false);
     }
 
     private static QueueRunDto CloneRun(

@@ -1,0 +1,4 @@
+<Project>
+  <Import Project="..\WorkspaceTplQueue\Directory.Build.targets"
+          Condition="Exists('..\WorkspaceTplQueue\Directory.Build.targets') and '$(SolutionFileName)' == 'WorkspaceTplQueue.sln'" />
+</Project>

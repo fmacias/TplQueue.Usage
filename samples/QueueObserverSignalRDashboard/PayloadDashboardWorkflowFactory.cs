@@ -1,5 +1,5 @@
 using Fmacias.TplQueue.Contracts;
-using Microsoft.Extensions.Logging;
+using Fmacias.TplQueue.Extensions;
 
 namespace TplQueue.Usage.QueueObserverSignalRDashboard;
 
@@ -58,9 +58,10 @@ internal sealed class PayloadDashboardWorkflowFactory
                 LoadAsync(payload, logger, ct)),
             name: "Payload Load",
             retryPolicy: retryPolicyFactory);
-
-        load.After(transform);
-        transform.After(extract);
+        
+        extract
+            .Then(transform)
+            .Then(load);
 
         var payloadJobsById = new Dictionary<Guid, IDataJobNode>
         {
@@ -211,36 +212,33 @@ internal sealed class PayloadDashboardWorkflowFactory
 
     public sealed class ExtractGreetingsPayload : IPayload
     {
-        public const string HandlerKey = "samples/signalr-dashboard/payload-extract/v1";
-
         public string InputXmlPath { get; set; } = string.Empty;
         public GreetingEnvelope[] Greetings { get; set; } = Array.Empty<GreetingEnvelope>();
         public int GreetingCount { get; set; }
-        public string PayloadId => HandlerKey;
+        public string PayloadId { get; set; } = Guid.NewGuid().ToString();
         public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
+        public string HandlerKey => "samples/signalr-dashboard/payload-extract/v1";
     }
 
     public sealed class TransformGreetingsPayload : IPayload
     {
-        public const string HandlerKey = "samples/signalr-dashboard/payload-transform/v1";
-
         public GreetingEnvelope[] SourceGreetings { get; set; } = Array.Empty<GreetingEnvelope>();
         public string SourceSnapshotJson { get; set; } = string.Empty;
         public GreetingCard[] Cards { get; set; } = Array.Empty<GreetingCard>();
         public string RenderingJson { get; set; } = string.Empty;
-        public string PayloadId => HandlerKey;
+        public string PayloadId { get; set; } = Guid.NewGuid().ToString();
         public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
+        public string HandlerKey => "samples/signalr-dashboard/payload-transform/v1";
     }
 
     public sealed class LoadGreetingsPayload : IPayload
     {
-        public const string HandlerKey = "samples/signalr-dashboard/payload-load/v1";
-
         public GreetingCard[] PublishedCards { get; set; } = Array.Empty<GreetingCard>();
         public string[] BroadcastMessages { get; set; } = Array.Empty<string>();
         public DateTime? CompletedUtc { get; set; }
-        public string PayloadId => HandlerKey;
+        public string PayloadId { get; set; } = Guid.NewGuid().ToString();
         public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
+        public string HandlerKey => "samples/signalr-dashboard/payload-load/v1";
     }
 
     public sealed class GreetingEnvelope

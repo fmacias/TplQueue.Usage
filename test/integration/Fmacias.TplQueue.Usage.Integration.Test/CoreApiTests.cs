@@ -1,7 +1,7 @@
 using Fmacias.TplQueue.Contracts;
 using Fmacias.TplQueue.Core;
-using Fmacias.TplQueue.Core.Jobs;
 using Fmacias.TplQueue.Defaults;
+using Fmacias.TplQueue.Extensions;
 using Fmacias.TplQueue.RetryPolicies;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;

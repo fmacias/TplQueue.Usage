@@ -30,6 +30,7 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
             }
 
             public string PayloadId { get; init; } = "dummy-1000-handler";
+            public string HandlerKey => "dummy-1000-handler";
             public bool Executed { get; init; }
             public string? Greating { get; init; }
             public DateTime CollectionTime => _collectionTime;
@@ -40,6 +41,7 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
             private readonly DateTime _collectionTime = DateTime.UtcNow;
 
             public string PayloadId { get; init; } = "dummy-handler";
+            public string HandlerKey => "dummy-handler";
             public bool Executed { get; init; }
             public string? Greating { get; init; }
 
@@ -92,9 +94,9 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 .CreateCache(_universalPayloadSerializer, _payloadJobFactory, new TestTypeResolver(), _handlerResolver, _retryPolicyFactory);
 
             _queue = _queueFactory.CacheQ(
+                dataJobCacheFactory: () => _memCache,
                 logger: _logger,
-                payloadLeaseCache: _memCache,
-                defaultQueue);
+                queue: defaultQueue);
             
             _loggingObserverUnsubscriber = _queue.Subscribe(loggingObserver);
         }
@@ -114,13 +116,13 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
             var childPayload = new DummyPayload();
             var root = _payloadJobFactory.DataJobRoot(
                 rootPayload,
-                _handlerResolver.Handler(rootPayload.PayloadId),
+                _handlerResolver.Handler(rootPayload.HandlerKey),
                 name: "root-job",
                 retryPolicy: () => _retryPolicyFactory.GetPolicy<NoRetryPolicy>());
             
             var child = _payloadJobFactory.DataJob(
                 childPayload,
-                _handlerResolver.Handler(childPayload.PayloadId),
+                _handlerResolver.Handler(childPayload.HandlerKey),
                 "Child payload job");
             
             root.After(child);
@@ -167,13 +169,13 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
         
             var root = _payloadJobFactory.DataJobRoot(
                 rootPayload,
-                _handlerResolver.Handler(rootPayload.PayloadId),
+                _handlerResolver.Handler(rootPayload.HandlerKey),
                 name: "root-job",
                 retryPolicy: () => _retryPolicyFactory.GetPolicy<NoRetryPolicy>());
 
             var child = _payloadJobFactory.DataJob(
                 childPayload,
-                _handlerResolver.Handler(childPayload.PayloadId),
+                _handlerResolver.Handler(childPayload.HandlerKey),
                 "Child payload job");
             
             root.After(child);
@@ -210,7 +212,7 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
                 entryDeleted:false);
             
             _queue.ResumePolling();
-            await _queue.Wait();
+            await _queue.WaitAsync();
             rootEntry = WaitForEntryStatus(root.Id, EntryStatus.Acknownledged);
             childEntry = WaitForEntryStatus(child.Id, EntryStatus.Acknownledged);
 
@@ -247,13 +249,13 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
 
             var root = _payloadJobFactory.DataJobRoot(
                 rootPayload,
-                _handlerResolver.Handler(rootPayload.PayloadId),
+                _handlerResolver.Handler(rootPayload.HandlerKey),
                 name: "root-job",
                 retryPolicy: () => _retryPolicyFactory.GetPolicy<NoRetryPolicy>());
 
             var child = _payloadJobFactory.DataJob(
                 childPayload,
-                _handlerResolver.Handler(childPayload.PayloadId),
+                _handlerResolver.Handler(childPayload.HandlerKey),
                 "Child payload job");
 
             root.After(child);
@@ -298,13 +300,13 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
 
             var root = _payloadJobFactory.DataJobRoot(
                 rootPayload,
-                _handlerResolver.Handler(rootPayload.PayloadId),
+                _handlerResolver.Handler(rootPayload.HandlerKey),
                 name: "root-job",
                 retryPolicy: () => _retryPolicyFactory.GetPolicy<NoRetryPolicy>());
 
             var child = _payloadJobFactory.DataJob(
                 childPayload,
-                _handlerResolver.Handler(childPayload.PayloadId),
+                _handlerResolver.Handler(childPayload.HandlerKey),
                 "Child payload job");
 
             root.After(child);
@@ -374,13 +376,13 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
 
             var root = _payloadJobFactory.DataJobRoot(
                 rootPayload,
-                _handlerResolver.Handler(rootPayload.PayloadId),
+                _handlerResolver.Handler(rootPayload.HandlerKey),
                 name: "root-job",
                 retryPolicy: () => _retryPolicyFactory.GetPolicy<NoRetryPolicy>());
 
             var child = _payloadJobFactory.DataJob(
                 childPayload,
-                _handlerResolver.Handler(childPayload.PayloadId),
+                _handlerResolver.Handler(childPayload.HandlerKey),
                 "Child payload job");
 
             root.After(child);
@@ -429,13 +431,13 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
 
             var root = _payloadJobFactory.DataJobRoot(
                 rootPayload,
-                _handlerResolver.Handler(rootPayload.PayloadId),
+                _handlerResolver.Handler(rootPayload.HandlerKey),
                 name: "root-job",
                 retryPolicy: () => _retryPolicyFactory.GetPolicy<NoRetryPolicy>());
 
             var child = _payloadJobFactory.DataJob(
                 childPayload,
-                _handlerResolver.Handler(childPayload.PayloadId),
+                _handlerResolver.Handler(childPayload.HandlerKey),
                 "Child payload job");
 
             root.After(child);
@@ -484,13 +486,13 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
 
             var root = _payloadJobFactory.DataJobRoot(
                 rootPayload,
-                _handlerResolver.Handler(rootPayload.PayloadId),
+                _handlerResolver.Handler(rootPayload.HandlerKey),
                 name: "root-job",
                 retryPolicy: () => _retryPolicyFactory.GetPolicy<NoRetryPolicy>());
 
             var child = _payloadJobFactory.DataJob(
                 childPayload,
-                _handlerResolver.Handler(childPayload.PayloadId),
+                _handlerResolver.Handler(childPayload.HandlerKey),
                 "Child payload job");
 
             root.After(child);
@@ -564,13 +566,13 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
 
             var root = _payloadJobFactory.DataJobRoot(
                 rootPayload,
-                _handlerResolver.Handler(rootPayload.PayloadId),
+                _handlerResolver.Handler(rootPayload.HandlerKey),
                 name: "root-job",
                 retryPolicy: () => _retryPolicyFactory.GetPolicy<NoRetryPolicy>());
 
             var child = _payloadJobFactory.DataJob(
                 childPayload,
-                _handlerResolver.Handler(childPayload.PayloadId),
+                _handlerResolver.Handler(childPayload.HandlerKey),
                 "Child payload job");
 
             root.After(child);

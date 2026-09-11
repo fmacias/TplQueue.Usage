@@ -1,7 +1,7 @@
 using Fmacias.TplQueue;
 using Fmacias.TplQueue.Contracts;
 using Fmacias.TplQueue.Core;
-using Fmacias.TplQueue.Core.Jobs;
+using Fmacias.TplQueue.Extensions;
 using Fmacias.TplQueue.RetryPolicies;
 using log4net;
 using Microsoft.Extensions.Logging;
@@ -279,7 +279,7 @@ namespace TplQueue.Usage.QueueObserverConsole
             if (q == null) throw new ArgumentNullException(nameof(q));
             if (logger == null) throw new ArgumentNullException(nameof(logger));
             
-            await q.Wait().ConfigureAwait(false);
+            await q.WaitAsync().ConfigureAwait(false);
             // The queue has drained, but observer publication is asynchronous.
             // Give the observer hub a short grace period so terminal log lines
             // are flushed before this console process exits.

@@ -66,7 +66,7 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
 
             _queue.ResumePolling();
 
-            await _queue.Wait();
+            await _queue.WaitAsync();
             Assert.AreEqual("2", executionOrder[0]);
             Assert.AreEqual("1", executionOrder[1]);
             _queue.Dispose();
@@ -94,7 +94,7 @@ namespace Fmacias.TplQueue.Integration.Test.Queues
 
             _queue.ResumePolling();
 
-            await _queue.Wait();
+            await _queue.WaitAsync();
             Assert.AreEqual("2", executionOrder[0]);
             Assert.AreEqual("1", executionOrder[1]);
             _queue.Dispose();

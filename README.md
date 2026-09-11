@@ -32,6 +32,7 @@ This repository focuses on runnable package-consumption samples, public integrat
 - [PackageConsumptionSmokeConsole](samples/PackageConsumptionSmokeConsole/README.md)
 - [QueueObserverConsole](samples/QueueObserverConsole/README.md)
 - [QueueObserverSignalRDashboard](samples/QueueObserverSignalRDashboard/README.md)
+- [TplQueue Blazor observable ETL sample](samples/TplQueue.Sample.BlazorSignalR/README.md)
 
 These samples are the canonical runnable examples cited by the product-repository docs.
 
@@ -79,6 +80,13 @@ The default local preview line is controlled by `TplQueuePackageVersion` in [Dir
 `TplQueue.Usage` is intentionally public-facing.
 
 - the projects consume published packages instead of private `TplQueue.Core` source projects
+- temporary exception: while `TPLQ-V1-015A` advances the package version, the
+  `TplQueue.Sample.BlazorSignalR` observable ETL sample uses source project
+  references to the sibling Adapter and Core repositories; this is a deliberate
+  upgrade workflow, not the published consumer model
+- when loaded through `WorkspaceTplQueue.sln`, workspace targets also switch the
+  loaded Usage integration and console validation projects to sibling source
+  references; standalone Usage builds remain package-based
 - the public consumption path is `nuget.org`; `..\TplQueue.NugetLocal` is only for local preview and maintainer workflows
 - restricted source access remains outside this repository and is documented in [docs/architecture/source-access-boundary.md](docs/architecture/source-access-boundary.md)
 

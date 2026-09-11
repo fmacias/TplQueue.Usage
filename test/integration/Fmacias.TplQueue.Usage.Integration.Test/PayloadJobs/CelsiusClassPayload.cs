@@ -15,6 +15,7 @@ namespace Fmacias.TplQueue.Integration.Test.PayloadJobs
         }
 
         public string PayloadId { get; init; }
+        public string HandlerKey => StableHandlerId.ToString();
         public double TemperatureCelsius { get; init; }
         public DateTime CollectionTime => _collectionTime;
         public bool Executed { get; init; }

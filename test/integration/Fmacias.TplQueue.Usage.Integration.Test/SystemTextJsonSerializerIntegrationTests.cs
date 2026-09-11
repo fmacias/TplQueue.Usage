@@ -64,6 +64,7 @@ namespace Fmacias.TplQueue.Integration.Test
                 Assert.That(hydratedRoot.Status, Is.EqualTo(TaskStatus.RanToCompletion));
                 Assert.That(hydratedPayload.Label, Is.EqualTo(payload.Label));
                 Assert.That(hydratedPayload.Sequence, Is.EqualTo(payload.Sequence));
+                Assert.That(hydratedPayload.HandlerKey, Is.EqualTo(payload.HandlerKey));
                 CollectionAssert.AreEqual(new[] { "json-cache:7" }, executions.ToArray());
             });
         }
@@ -88,6 +89,7 @@ namespace Fmacias.TplQueue.Integration.Test
             public string Label { get; set; } = string.Empty;
             public int Sequence { get; set; }
             public string PayloadId => PayloadHandlerKey;
+            public string HandlerKey => PayloadHandlerKey;
             public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
         }
 

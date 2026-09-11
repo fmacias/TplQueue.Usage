@@ -149,6 +149,7 @@ namespace Fmacias.TplQueue.Integration.Test.Consumers
             public string Stage { get; set; } = string.Empty;
             public int Sequence { get; set; }
             public string PayloadId => PayloadHandlerKey;
+            public string HandlerKey => PayloadHandlerKey;
             public DateTime CollectionTime { get; set; } = DateTime.UtcNow;
         }
 
@@ -172,7 +173,7 @@ namespace Fmacias.TplQueue.Integration.Test.Consumers
             public TaskStatus Status => TaskStatus.RanToCompletion;
             public IReadOnlyCollection<IJobInfo> Dependencies => Array.Empty<IJobInfo>();
             public Guid CrossQueueId => Guid.NewGuid();
-            public string PayloadHandlerKey => _payload.PayloadId;
+            public string PayloadHandlerKey => _payload.HandlerKey;
 
             public string Serialize(IUniversalDataSerializer serializer)
             {

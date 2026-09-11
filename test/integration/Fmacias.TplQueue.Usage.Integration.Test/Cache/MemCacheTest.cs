@@ -5,7 +5,7 @@ using Fmacias.TplQueue.Cache.MemCache;
 using static Fmacias.TplQueue.Integration.Test.Cache.CacheFactoryTests;
 using System.Runtime.CompilerServices;
 using Fmacias.TplQueue.Defaults;
-using Fmacias.TplQueue.Core.Jobs;
+using Fmacias.TplQueue.Extensions;
 
 namespace Fmacias.TplQueue.Integration.Test.Cache
 {
@@ -40,6 +40,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
         private class DummyPayload : IPayload
         {
             public string PayloadId => "dummy";
+            public string HandlerKey => "dummy";
 
             public DateTime CollectionTime => DateTime.UtcNow;
         }
@@ -136,7 +137,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
             var root = _dataJobFactory 
                 .DataJobRoot(
                     payload,
-                    _payloadHandlerResolver.Handler(payload.PayloadId),
+                    _payloadHandlerResolver.Handler(payload.HandlerKey),
                     name: "root-job",
                     retryPolicy: () => linearBackoffFactory.CreatePolicy());
             return root;
@@ -148,7 +149,7 @@ namespace Fmacias.TplQueue.Integration.Test.Cache
 
             var child = _dataJobFactory.DataJob(
                 payload,
-                _payloadHandlerResolver.Handler(payload.PayloadId),
+                _payloadHandlerResolver.Handler(payload.HandlerKey),
                 name);
             return child;
         }
