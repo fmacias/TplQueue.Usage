@@ -33,8 +33,12 @@ This repository focuses on runnable package-consumption samples, public integrat
 - [QueueObserverConsole](samples/QueueObserverConsole/README.md)
 - [QueueObserverSignalRDashboard](samples/QueueObserverSignalRDashboard/README.md)
 - [TplQueue Blazor observable ETL sample](samples/TplQueue.Sample.BlazorSignalR/README.md)
+- [Blazor job monitor architecture and execution channels](docs/architecture/blazor-consumer-sample.md)
 
 These samples are the canonical runnable examples cited by the product-repository docs.
+
+The Blazor sample uses the reusable `job-queue-timeline` Web Component with real runtime execution channels, vertical time, and a full-area viewer without a permanent details panel. See the maintained architecture guide for contracts and validation.
+The component's five-second overview uses exact square position markers, a left UTC ruler and compact channels. Dense jobs use count markers with temporary closer inspection in the same viewer.
 
 ## Public package consumption
 
@@ -81,12 +85,12 @@ The default local preview line is controlled by `TplQueuePackageVersion` in [Dir
 
 - the projects consume published packages instead of private `TplQueue.Core` source projects
 - temporary exception: while `TPLQ-V1-015A` advances the package version, the
-  `TplQueue.Sample.BlazorSignalR` observable ETL sample uses source project
+  `TplQueue.Sample.BlazorSignalR` host and its `TplQueue.Sample.Etl` module use source project
   references to the sibling Adapter and Core repositories; this is a deliberate
   upgrade workflow, not the published consumer model
 - when loaded through `WorkspaceTplQueue.sln`, workspace targets also switch the
   loaded Usage integration and console validation projects to sibling source
-  references; standalone Usage builds remain package-based
+  references; other standalone Usage projects remain package-based
 - the public consumption path is `nuget.org`; `..\TplQueue.NugetLocal` is only for local preview and maintainer workflows
 - restricted source access remains outside this repository and is documented in [docs/architecture/source-access-boundary.md](docs/architecture/source-access-boundary.md)
 

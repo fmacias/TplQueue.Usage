@@ -8,7 +8,8 @@ internal sealed record EtlQueueDescriptor(
     Guid QueueId,
     string GroupId,
     string DisplayName,
-    int Order);
+    int Order,
+    int MaxParallelism = 1);
 
 /// <summary>Maps runtime queue identifiers to stable presentation groups.</summary>
 internal sealed class EtlQueueCatalog
@@ -27,7 +28,7 @@ internal sealed class EtlQueueCatalog
         }
 
         if (ordered.Any(descriptor =>
-                descriptor.QueueId == Guid.Empty ||
+                descriptor.QueueId == Guid.Empty || descriptor.MaxParallelism < 1 ||
                 string.IsNullOrWhiteSpace(descriptor.GroupId) ||
                 string.IsNullOrWhiteSpace(descriptor.DisplayName)))
         {

@@ -2,10 +2,10 @@ using System.Collections.ObjectModel;
 
 namespace TplQueue.Sample.BlazorSignalR.Presentation.Etl;
 
-/// <summary>Immutable job lifecycle projection consumed by the dashboard.</summary>
 internal sealed record EtlJobSnapshot(
     Guid JobId,
     Guid? RootJobId,
+    IReadOnlyList<Guid> DependencyJobIds,
     string Name,
     string QueueGroupId,
     string QueueDisplayName,
@@ -15,9 +15,11 @@ internal sealed record EtlJobSnapshot(
     DateTimeOffset? StartedAt,
     DateTimeOffset? EndedAt,
     int RetryCount,
-    string? Error);
+    string? Error,
+    string LastEventType,
+    DateTimeOffset LastEventAt,
+    int? ExecutionChannel = null);
 
-/// <summary>Immutable aggregate counts for one queue group.</summary>
 internal sealed record EtlQueueSnapshot(
     string GroupId,
     string DisplayName,
@@ -25,20 +27,15 @@ internal sealed record EtlQueueSnapshot(
     int JobCount,
     int RunningCount,
     int CompletedCount,
-    int FailedCount);
+    int FailedCount,
+    int MaxParallelism = 1);
 
-/// <summary>Immutable application-wide ETL dashboard state.</summary>
 internal sealed class EtlDashboardSnapshot
 {
-    public EtlDashboardSnapshot(
-        IReadOnlyList<EtlQueueSnapshot> queues,
-        IReadOnlyList<EtlJobSnapshot> jobs)
+    public EtlDashboardSnapshot(IReadOnlyList<EtlQueueSnapshot> queues, IReadOnlyList<EtlJobSnapshot> jobs)
     {
-        if (queues == null) throw new ArgumentNullException(nameof(queues));
-        if (jobs == null) throw new ArgumentNullException(nameof(jobs));
-
-        Queues = new ReadOnlyCollection<EtlQueueSnapshot>(queues.ToArray());
-        Jobs = new ReadOnlyCollection<EtlJobSnapshot>(jobs.ToArray());
+        Queues = new ReadOnlyCollection<EtlQueueSnapshot>((queues ?? throw new ArgumentNullException(nameof(queues))).ToArray());
+        Jobs = new ReadOnlyCollection<EtlJobSnapshot>((jobs ?? throw new ArgumentNullException(nameof(jobs))).ToArray());
     }
 
     public IReadOnlyList<EtlQueueSnapshot> Queues { get; }

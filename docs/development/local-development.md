@@ -46,3 +46,16 @@ You can override the consumed package line at command time:
 ```
 
 That keeps the committed default stable while letting you validate a different package set.
+
+## Blazor/ETL source-reference exception
+
+During preview advancement, `TplQueue.Sample.BlazorSignalR` and
+`TplQueue.Sample.Etl` contain explicit sibling-source references. Their builds
+require the sibling checkout layout even outside `WorkspaceTplQueue.sln`.
+Changing `TplQueuePackageVersion` does not convert those references to packages.
+See the [sample architecture and contract guide](../architecture/blazor-consumer-sample.md).
+
+Keep workspace source validation separate from package-consumption validation.
+Pack through the coordinated workspace `pack.ps1` into `../TplQueue.NugetLocal`
+and validate a consumer whose active TplQueue dependencies are package references.
+Do not remove the workspace's development-time reference switch for this purpose.

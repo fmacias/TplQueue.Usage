@@ -34,6 +34,9 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
         }
 
         var descriptor = _catalog.Resolve(jobEvent.JobInfo.CrossQueueId);
+        var channel = (jobEvent as IJobExecutionEvent)?.ExecutionChannel;
+        if (channel.HasValue && (channel.Value < 0 || channel.Value >= descriptor.MaxParallelism))
+            throw new ArgumentOutOfRangeException(nameof(jobEvent), "Execution channel is outside the queue capacity.");
         var fingerprint = EventFingerprint.Create(jobEvent);
 
         lock (_sync)
@@ -44,11 +47,23 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
             }
 
             var job = GetOrCreateJob(jobEvent.JobInfo, descriptor, jobEvent.Timestamp);
+            // A late pre-execution event must never erase captured execution identity.
+            if (channel.HasValue && (job.ChannelObservedAt == null || ToOffset(jobEvent.Timestamp) >= job.ChannelObservedAt))
+            {
+                job.ExecutionChannel = channel;
+                job.ChannelObservedAt = ToOffset(jobEvent.Timestamp);
+            }
+            CaptureDependencies(job, jobEvent.JobInfo);
             ApplyLifecycle(job, jobEvent);
 
             if (jobEvent.Status == JobEventStatus.RootSuccessed)
             {
-                AssignRoot(jobEvent.JobInfo, jobEvent.JobInfo.Id, new HashSet<Guid>());
+                // A root event carries the complete dependency graph. Use the
+                // root event timestamp for any dependency that has not emitted
+                // its own event yet; this is the last honest time available to
+                // the passive projection and keeps the connector endpoint
+                // visible without inventing a current wall-clock timestamp.
+                AssignRoot(jobEvent.JobInfo, jobEvent.JobInfo.Id, new HashSet<Guid>(), jobEvent.Timestamp);
             }
         }
 
@@ -117,6 +132,8 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
             (StatusRank(mappedStatus) == StatusRank(job.Status) && observedAt >= job.StatusObservedAt))
         {
             job.Status = mappedStatus;
+            job.LastEventType = jobEvent.Status.ToString();
+            job.LastEventAt = observedAt;
             job.StatusObservedAt = observedAt;
         }
 
@@ -127,7 +144,7 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
         }
     }
 
-    private void AssignRoot(IJobInfo jobInfo, Guid rootJobId, ISet<Guid> visited)
+    private void AssignRoot(IJobInfo jobInfo, Guid rootJobId, ISet<Guid> visited, DateTime observedAt)
     {
         if (!visited.Add(jobInfo.Id))
         {
@@ -135,7 +152,7 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
         }
 
         var descriptor = _catalog.Resolve(jobInfo.CrossQueueId);
-        var job = GetOrCreateJob(jobInfo, descriptor, DateTime.UtcNow);
+        var job = GetOrCreateJob(jobInfo, descriptor, observedAt);
 
         if (jobInfo.Id != rootJobId && job.RootJobId == jobInfo.Id)
         {
@@ -143,10 +160,19 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
         }
 
         job.RootJobId = rootJobId;
+        CaptureDependencies(job, jobInfo);
 
         foreach (var dependency in jobInfo.Dependencies ?? Array.Empty<IJobInfo>())
         {
-            AssignRoot(dependency, rootJobId, visited);
+            AssignRoot(dependency, rootJobId, visited, observedAt);
+        }
+    }
+
+    private static void CaptureDependencies(MutableJob job, IJobInfo jobInfo)
+    {
+        foreach (var dependency in jobInfo.Dependencies ?? Array.Empty<IJobInfo>())
+        {
+            job.DependencyJobIds.Add(dependency.Id);
         }
     }
 
@@ -168,7 +194,8 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
             queueJobs.Length,
             queueJobs.Count(job => job.Status == "running"),
             queueJobs.Count(job => job.Status == "completed"),
-            queueJobs.Count(job => job.Status == "failed"));
+            queueJobs.Count(job => job.Status == "failed"),
+            descriptor.MaxParallelism);
     }
 
     private void NotifyChangedSubscribers()
@@ -258,14 +285,16 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
         JobEventStatus Status,
         DateTime Timestamp,
         int RetryCount,
-        string? Error)
+        string? Error,
+        int? ExecutionChannel)
     {
         public static EventFingerprint Create(IJobEvent jobEvent) => new(
             jobEvent.JobInfo.Id,
             jobEvent.Status,
             jobEvent.Timestamp,
             jobEvent.RetryCount,
-            jobEvent.Exception?.Message);
+            jobEvent.Exception?.Message,
+            (jobEvent as IJobExecutionEvent)?.ExecutionChannel);
     }
 
     private sealed class MutableJob
@@ -283,25 +312,32 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
             QueueDisplayName = queueDisplayName;
             FirstObservedAt = firstObservedAt;
             StatusObservedAt = firstObservedAt;
+            LastEventAt = firstObservedAt;
         }
 
         public Guid JobId { get; }
         public Guid? RootJobId { get; set; }
+        public HashSet<Guid> DependencyJobIds { get; } = new();
         public string Name { get; }
         public string QueueGroupId { get; }
         public string QueueDisplayName { get; }
         public string Status { get; set; } = "queued";
         public DateTimeOffset StatusObservedAt { get; set; }
+        public string LastEventType { get; set; } = "Observed";
+        public DateTimeOffset LastEventAt { get; set; }
         public DateTimeOffset FirstObservedAt { get; set; }
         public DateTimeOffset? EnqueuedAt { get; set; }
         public DateTimeOffset? StartedAt { get; set; }
         public DateTimeOffset? EndedAt { get; set; }
         public int RetryCount { get; set; }
         public string? Error { get; set; }
+        public int? ExecutionChannel { get; set; }
+        public DateTimeOffset? ChannelObservedAt { get; set; }
 
         public EtlJobSnapshot ToSnapshot() => new(
             JobId,
             RootJobId,
+            DependencyJobIds.OrderBy(id => id).ToArray(),
             Name,
             QueueGroupId,
             QueueDisplayName,
@@ -311,6 +347,9 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
             StartedAt,
             EndedAt,
             RetryCount,
-            Error);
+            Error,
+            LastEventType,
+            LastEventAt,
+            ExecutionChannel);
     }
 }

@@ -1,0 +1,6 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Job monitor browser acceptance</title>
+<style>body{background:#1e1e1e;color:#d4d4d4;font:14px system-ui}job-queue-timeline{height:520px;width:950px;max-width:100%}li{margin:8px}.fail{color:#f48771}.pass{color:#89d185}</style></head>
+<body><h1>Job monitor browser acceptance</h1><p id="summary">Running…</p><ol id="results"></ol>
+<job-queue-timeline></job-queue-timeline>
+<script>if(location.search.includes('automation')){const image=new Image();image.hidden=true;image.src='http://127.0.0.1:4178/__acceptance/wait?id=standalone';document.body.append(image);}</script>
+<script type="module" src="./browser.js"></script></body></html>

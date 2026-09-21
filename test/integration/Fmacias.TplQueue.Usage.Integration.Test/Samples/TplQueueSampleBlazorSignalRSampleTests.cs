@@ -8,10 +8,11 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
     [TestFixture]
     public sealed class TplQueueSampleBlazorSignalRSampleTests
     {
-        [Test]
-        public async Task PassiveTimelineDashboard_IsTheOnlyApplicationSurface()
+        [TestCase(false)]
+        [TestCase(true)]
+        public async Task PassiveTimelineDashboard_IsTheOnlyApplicationSurface(bool launchFromSource)
         {
-            await using var harness = await BlazorSignalRSampleHarness.StartAsync();
+            await using var harness = await BlazorSignalRSampleHarness.StartAsync(launchFromSource);
 
             var dashboardPage = await harness.WaitForCompletedDashboardAsync();
             var formerDashboardStatus = await harness.GetStatusCodeAsync("/tplqueue");
@@ -24,14 +25,11 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 Assert.That(dashboardPage, Does.Contain("ParallelQ"));
                 Assert.That(dashboardPage, Does.Contain("FifoQ"));
                 Assert.That(dashboardPage, Does.Contain("CacheQ"));
-                Assert.That(dashboardPage, Does.Contain("Fit timeline"));
-                Assert.That(dashboardPage, Does.Contain("passive"));
-                Assert.That(
-                    dashboardPage,
-                    Does.Contain("lib/vis-timeline/8.5.2/vis-timeline-graph2d.min.css"));
-                Assert.That(
-                    dashboardPage,
-                    Does.Contain("lib/vis-timeline/8.5.2/vis-timeline-graph2d.min.js"));
+                Assert.That(dashboardPage, Does.Contain("job-queue-timeline"));
+                Assert.That(dashboardPage, Does.Contain("Passive observer view"));
+                Assert.That(dashboardPage, Does.Not.Contain("ChartJS"));
+                Assert.That(dashboardPage, Does.Not.Contain("chart.umd"));
+                Assert.That(dashboardPage, Does.Not.Contain("job-details"));
                 Assert.That(dashboardPage, Does.Not.Contain("Select queue"));
                 Assert.That(dashboardPage, Does.Not.Contain("Start workload"));
                 Assert.That(dashboardPage, Does.Not.Contain("<nav"));
@@ -40,6 +38,8 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 Assert.That(apiStatus, Is.EqualTo(HttpStatusCode.NotFound));
                 Assert.That(openApiStatus, Is.EqualTo(HttpStatusCode.NotFound));
             });
+            Assert.That(await harness.GetStatusCodeAsync("/job-monitor/src/job-queue-timeline.js"), Is.EqualTo(HttpStatusCode.OK));
+            Assert.That(await harness.GetStatusCodeAsync("/job-monitor/integrations/blazor/job-monitor.js"), Is.EqualTo(HttpStatusCode.OK));
         }
 
         private sealed class BlazorSignalRSampleHarness : IAsyncDisposable
@@ -53,7 +53,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 _client = client;
             }
 
-            public static async Task<BlazorSignalRSampleHarness> StartAsync()
+            public static async Task<BlazorSignalRSampleHarness> StartAsync(bool launchFromSource)
             {
                 var repoRoot = ResolveRepositoryRoot();
                 var sampleRoot = Path.Combine(repoRoot, "samples", "TplQueue.Sample.BlazorSignalR");
@@ -74,7 +74,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 var port = GetFreePort();
                 var baseAddress = new Uri($"http://127.0.0.1:{port}");
                 var listeningUrl = baseAddress.AbsoluteUri.TrimEnd('/');
-                var process = StartProcess(sampleDllPath, sampleOutputDirectory, listeningUrl);
+                var process = StartProcess(sampleDllPath, launchFromSource ? sampleRoot : sampleOutputDirectory, listeningUrl);
                 var client = new HttpClient
                 {
                     BaseAddress = baseAddress,
@@ -223,32 +223,8 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
 
             private static bool ContainsCompletedQueueCards(string dashboardPage)
             {
-                var completedQueues = new HashSet<string>(StringComparer.Ordinal);
-                var queueCards = Regex.Matches(
-                    dashboardPage,
-                    "<article class=\"card queue-summary-card\".*?</article>",
-                    RegexOptions.Singleline | RegexOptions.CultureInvariant);
-
-                foreach (Match queueCard in queueCards)
-                {
-                    var queueName = Regex.Match(
-                        queueCard.Value,
-                        "<h2[^>]*>(?<queue>ParallelQ|FifoQ|CacheQ)</h2>",
-                        RegexOptions.CultureInvariant);
-
-                    if (!queueName.Success ||
-                        !HasSummaryValue(queueCard.Value, "Total", 6) ||
-                        !HasSummaryValue(queueCard.Value, "Running", 0) ||
-                        !HasSummaryValue(queueCard.Value, "Completed", 6) ||
-                        !HasSummaryValue(queueCard.Value, "Failed", 0))
-                    {
-                        continue;
-                    }
-
-                    completedQueues.Add(queueName.Groups["queue"].Value);
-                }
-
-                return completedQueues.Count == 3;
+                return new[] { "parallel", "fifo", "cache" }.All(queue =>
+                    dashboardPage.Contains($"data-queue=\"{queue}\" data-completed=\"6\" data-total=\"6\"", StringComparison.Ordinal));
             }
 
             private static bool HasSummaryValue(

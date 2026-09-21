@@ -21,19 +21,19 @@ internal static class MeasurementEtlServiceCollectionExtensions
                 sp.GetRequiredService<IParallelQ>().QueueId,
                 "parallel",
                 "ParallelQ",
-                0),
+                0, sp.GetRequiredService<IParallelQ>().MaxParallelism),
             new EtlQueueDescriptor(
                 AvailableQueue.FIFO,
                 sp.GetRequiredService<IFifoQ>().QueueId,
                 "fifo",
                 "FifoQ",
-                1),
+                1, sp.GetRequiredService<IFifoQ>().MaxParallelism),
             new EtlQueueDescriptor(
                 AvailableQueue.Cache,
                 sp.GetRequiredService<ICacheQ>().QueueId,
                 "cache",
                 "CacheQ",
-                2)
+                2, sp.GetRequiredService<ICacheQ>().MaxParallelism)
         }));
         services.AddSingleton<IEtlExecutionProjectionStore, EtlExecutionProjectionStore>();
         services.AddSingleton<EtlQueueObserver>();

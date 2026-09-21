@@ -1,171 +1,57 @@
 @page "/"
 @rendermode InteractiveServer
-@implements IAsyncDisposable
+@implements IDisposable
 @inject IEtlExecutionProjectionStore ProjectionStore
-@inject IJSRuntime JavaScript
 
-<PageTitle>TplQueue ETL timeline</PageTitle>
-
-<header class="dashboard-heading">
-    <div>
-        <p class="eyebrow">TplQueue observable sample</p>
-        <h1>ETL execution timeline</h1>
-        <p>
-            This passive dashboard renders backend-owned work. Queue policy, payloads,
-            handlers, retries, and graph topology stay on the server.
-        </p>
-    </div>
-    <button class="btn btn-outline-primary" type="button" @onclick="FitTimelineAsync">
-        Fit timeline
-    </button>
-</header>
-
-<section class="queue-summary-grid" aria-label="Queue execution summaries">
-    @foreach (var queue in _snapshot.Queues)
+<PageTitle>TplQueue job monitor</PageTitle>
+<header class="dashboard-heading"><h1>TplQueue <span>Job monitor</span></h1><span>Passive observer view</span></header>
+<section class="monitor-host" aria-label="ETL execution timeline">
+    <JobMonitor Snapshot="_snapshot" JobSelected="OnJobSelected" />
+</section>
+<div class="visually-hidden" aria-live="polite">
+    @foreach (var queue in _queues)
     {
-        <article class="card queue-summary-card">
-            <div class="card-body">
-                <h2 class="h5">@queue.DisplayName</h2>
-                <dl class="queue-summary-values">
-                    <div><dt>Total</dt><dd>@queue.JobCount</dd></div>
-                    <div><dt>Running</dt><dd>@queue.RunningCount</dd></div>
-                    <div><dt>Completed</dt><dd>@queue.CompletedCount</dd></div>
-                    <div><dt>Failed</dt><dd>@queue.FailedCount</dd></div>
-                </dl>
-            </div>
-        </article>
+        <span data-queue="@queue.GroupId" data-completed="@queue.CompletedCount" data-total="@queue.JobCount">@queue.DisplayName: @queue.CompletedCount of @queue.JobCount completed.</span>
     }
-</section>
-
-<section class="timeline-card" aria-label="ETL job execution timeline">
-    <div id="etl-execution-timeline" class="etl-timeline"></div>
-</section>
-
-@if (_selectedJob is not null)
-{
-    <aside class="selected-job card" aria-live="polite">
-        <div class="card-body">
-            <h2 class="h5">@_selectedJob.Name</h2>
-            <dl>
-                <dt>Status</dt><dd>@_selectedJob.Status</dd>
-                <dt>Queue</dt><dd>@_selectedJob.QueueDisplayName</dd>
-                <dt>Job ID</dt><dd><code>@_selectedJob.JobId</code></dd>
-                <dt>Retries</dt><dd>@_selectedJob.RetryCount</dd>
-            </dl>
-        </div>
-    </aside>
-}
+</div>
 
 @code {
-    private EtlDashboardSnapshot _snapshot = null!;
-    private EtlJobSnapshot? _selectedJob;
-    private IJSObjectReference? _timelineModule;
-    private DotNetObjectReference<Dashboard>? _dotNetReference;
-    private string? _timelineElementId;
-    private bool _disposed;
+    private JobMonitorSnapshot _snapshot = new(Array.Empty<JobMonitorQueue>(), Array.Empty<JobMonitorJob>());
+    private IReadOnlyList<EtlQueueSnapshot> _queues = Array.Empty<EtlQueueSnapshot>();
+    private Guid? _selectedJobId;
+    private volatile bool _disposed;
+    private int _refreshPending;
 
     protected override void OnInitialized()
     {
-        _snapshot = ProjectionStore.GetSnapshot();
         ProjectionStore.Changed += OnProjectionChanged;
+        Refresh();
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private void Refresh()
     {
-        if (!firstRender || _disposed)
-        {
-            return;
-        }
-
-        _timelineModule = await JavaScript.InvokeAsync<IJSObjectReference>(
-            "import",
-            "./js/tplqueueTimeline.js");
-        _dotNetReference = DotNetObjectReference.Create(this);
-        var timeline = EtlTimelineMapper.Map(_snapshot);
-        _timelineElementId = await _timelineModule.InvokeAsync<string>(
-            "create",
-            "etl-execution-timeline",
-            timeline.Groups,
-            timeline.Items,
-            new { },
-            _dotNetReference);
+        var state = ProjectionStore.GetSnapshot();
+        _queues = state.Queues;
+        _snapshot = JobMonitorMapper.Map(state);
     }
 
-    private void OnProjectionChanged(object? sender, EventArgs eventArgs)
+    private void OnProjectionChanged(object? sender, EventArgs args)
     {
-        _ = InvokeAsync(RefreshAsync);
+        if (_disposed || Interlocked.Exchange(ref _refreshPending, 1) != 0) return;
+        _ = InvokeAsync(() =>
+        {
+            Interlocked.Exchange(ref _refreshPending, 0);
+            if (_disposed) return;
+            Refresh();
+            StateHasChanged();
+        });
     }
 
-    private async Task RefreshAsync()
+    private void OnJobSelected(Guid jobId) => _selectedJobId = jobId;
+
+    public void Dispose()
     {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _snapshot = ProjectionStore.GetSnapshot();
-        if (_selectedJob is not null)
-        {
-            _selectedJob = _snapshot.Jobs.SingleOrDefault(job => job.JobId == _selectedJob.JobId);
-        }
-
-        if (_timelineModule is not null && _timelineElementId is not null)
-        {
-            var timeline = EtlTimelineMapper.Map(_snapshot);
-            await _timelineModule.InvokeVoidAsync(
-                "update",
-                _timelineElementId,
-                timeline.Groups,
-                timeline.Items);
-        }
-
-        StateHasChanged();
-    }
-
-    private async Task FitTimelineAsync()
-    {
-        if (_timelineModule is not null && _timelineElementId is not null)
-        {
-            await _timelineModule.InvokeVoidAsync("fit", _timelineElementId);
-        }
-    }
-
-    [JSInvokable]
-    public Task OnTimelineItemSelected(string? itemId)
-    {
-        _selectedJob = Guid.TryParse(itemId, out var jobId)
-            ? _snapshot.Jobs.SingleOrDefault(job => job.JobId == jobId)
-            : null;
-        StateHasChanged();
-        return Task.CompletedTask;
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
         _disposed = true;
         ProjectionStore.Changed -= OnProjectionChanged;
-
-        if (_timelineModule is not null)
-        {
-            try
-            {
-                if (_timelineElementId is not null)
-                {
-                    await _timelineModule.InvokeVoidAsync("dispose", _timelineElementId);
-                }
-
-                await _timelineModule.DisposeAsync();
-            }
-            catch (JSDisconnectedException)
-            {
-            }
-        }
-
-        _dotNetReference?.Dispose();
     }
 }

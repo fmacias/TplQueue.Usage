@@ -1,0 +1,71 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<job-queue-timeline @ref="_element"></job-queue-timeline>
+
+@code {
+    [Parameter, EditorRequired] public JobMonitorSnapshot Snapshot { get; set; } = default!;
+    [Parameter] public EventCallback<Guid> JobSelected { get; set; }
+    private ElementReference _element;
+    private IJSObjectReference? _module;
+    private DotNetObjectReference<JobMonitor>? _callback;
+    private readonly SemaphoreSlim _interop = new(1, 1);
+    private bool _disposed;
+    private long _revision;
+    private long _sentRevision = -1;
+
+    protected override void OnParametersSet() => _revision++;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await _interop.WaitAsync();
+        try
+        {
+            if (_disposed) return;
+            if (_module == null)
+            {
+                _module = await JS.InvokeAsync<IJSObjectReference>("import", "./job-monitor/integrations/blazor/job-monitor.js");
+                if (_disposed) return;
+                _callback = DotNetObjectReference.Create(this);
+                await _module.InvokeVoidAsync("attach", _element, _callback);
+            }
+            while (!_disposed && _sentRevision != _revision)
+            {
+                var revision = _revision;
+                await _module.InvokeVoidAsync("update", _element, Snapshot);
+                _sentRevision = revision;
+            }
+        }
+        catch (JSDisconnectedException) { }
+        catch (TaskCanceledException) when (_disposed) { }
+        finally { _interop.Release(); }
+    }
+
+    [JSInvokable]
+    public Task SelectJob(string jobId) => !_disposed && Guid.TryParse(jobId, out var id)
+        ? JobSelected.InvokeAsync(id) : Task.CompletedTask;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        await _interop.WaitAsync();
+        try
+        {
+            if (_module != null)
+            {
+                try { await _module.InvokeVoidAsync("detach", _element); }
+                catch (JSDisconnectedException) { }
+                catch (TaskCanceledException) { }
+                try { await _module.DisposeAsync(); }
+                catch (JSDisconnectedException) { }
+            }
+        }
+        finally
+        {
+            _callback?.Dispose();
+            // Keep the gate alive for a render already queued on the circuit context.
+            _interop.Release();
+        }
+    }
+}

@@ -58,3 +58,6 @@ nunit-*.xml
 *.csproj.user
 /samples/QueueObserverSignalRDashboard/.github/copilot-instructions.md
 /samples/TestSignalR/BlazorApp1
+
+# Generated from tools/TplQueue.JobMonitor during the Blazor sample build.
+/samples/TplQueue.Sample.BlazorSignalR/wwwroot/job-monitor/

@@ -201,6 +201,66 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                     Is.All.EqualTo(root.Id));
                 Assert.That(jobs.Single(job => job.JobId == root.Id).RootJobId,
                     Is.EqualTo(root.Id));
+                Assert.That(jobs.Single(job => job.JobId == transform.Id).DependencyJobIds,
+                    Is.EqualTo(new[] { ingest.Id }));
+                Assert.That(jobs.Single(job => job.JobId == root.Id).DependencyJobIds,
+                    Is.EqualTo(new[] { transform.Id }));
+            });
+        }
+
+        [Test]
+        public void ScatterTimeline_ConnectsDirectDependenciesInExecutionDirection()
+        {
+            var store = CreateStore();
+            var ingest = Job(Guid.NewGuid(), "Ingest measurements", CacheQueueId);
+            var transform = Job(Guid.NewGuid(), "Transform measurements", CacheQueueId, ingest);
+            var root = Job(Guid.NewGuid(), "Load measurement summary", CacheQueueId, transform);
+
+            store.Apply(Event(JobEventStatus.Successed, ingest, Utc(10, 15, 1)));
+            store.Apply(Event(JobEventStatus.Successed, transform, Utc(10, 15, 2)));
+            store.Apply(Event(JobEventStatus.RootSuccessed, root, Utc(10, 15, 3)));
+
+            var timeline = EtlScatterTimelineMapper.Map(store.GetSnapshot());
+
+            Assert.That(timeline.Connections, Is.EquivalentTo(new[]
+            {
+                new EtlScatterConnection(ingest.Id, transform.Id),
+                new EtlScatterConnection(transform.Id, root.Id)
+            }));
+        }
+
+        [Test]
+        public void ScatterTimeline_AlignsJobsFromTheSameRootSequenceAcrossQueues()
+        {
+            var store = CreateStore();
+            var firstDependency = Job(Guid.NewGuid(), "First dependency", FifoQueueId);
+            var firstRoot = Job(Guid.NewGuid(), "First root", ParallelQueueId, firstDependency);
+            var secondDependency = Job(Guid.NewGuid(), "Second dependency", FifoQueueId);
+            var secondRoot = Job(Guid.NewGuid(), "Second root", ParallelQueueId, secondDependency);
+            var reference = Utc(10, 15, 0);
+
+            store.Apply(Event(JobEventStatus.Successed, firstDependency, reference.AddSeconds(1)));
+            store.Apply(Event(JobEventStatus.RootSuccessed, firstRoot, reference.AddSeconds(2)));
+            store.Apply(Event(JobEventStatus.Successed, secondDependency, reference.AddSeconds(3)));
+            store.Apply(Event(JobEventStatus.RootSuccessed, secondRoot, reference.AddSeconds(4)));
+
+            var timeline = EtlScatterTimelineMapper.Map(
+                store.GetSnapshot(),
+                new HashSet<string>(StringComparer.Ordinal) { "parallel", "fifo" },
+                reference,
+                pastWindowMilliseconds: 5_000,
+                futureWindowMilliseconds: 5_000,
+                expandPastWindowForRetainedJobs: false);
+            var points = timeline.Points.ToDictionary(point => point.JobId);
+
+            var parallelDelta = points[secondRoot.Id].DisplayedY - points[firstRoot.Id].DisplayedY;
+            var fifoDelta = points[secondDependency.Id].DisplayedY - points[firstDependency.Id].DisplayedY;
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(points[firstDependency.Id].RootJobId, Is.EqualTo(firstRoot.Id));
+                Assert.That(points[secondDependency.Id].RootJobId, Is.EqualTo(secondRoot.Id));
+                Assert.That(fifoDelta, Is.EqualTo(parallelDelta).Within(0.0001));
             });
         }
 
@@ -317,37 +377,118 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
 
             Assert.That(store.GetSnapshot().Jobs, Has.Count.EqualTo(1));
         }
-
         [Test]
-        public void TimelineMapper_UsesStableGroupsStatusesAndEncodedTooltipText()
+        public void ScatterTimeline_UsesStableLanesActualTimestampAndIndividualPoint()
         {
             var store = CreateStore();
-            var jobInfo = Job(
-                Guid.NewGuid(),
-                "<strong>Load</strong>",
-                CacheQueueId);
-            store.Apply(Event(
-                JobEventStatus.Failed,
-                jobInfo,
-                Utc(10, 15, 0),
-                exception: new InvalidOperationException("<script>alert(1)</script>")));
+            var jobInfo = Job(Guid.NewGuid(), "Load measurements", CacheQueueId);
+            var observedAt = Utc(10, 15, 0);
+            store.Apply(Event(JobEventStatus.Failed, jobInfo, observedAt,
+                exception: new InvalidOperationException("failure")));
 
-            var timeline = EtlTimelineMapper.Map(store.GetSnapshot());
-            var item = timeline.Items.Single();
-
+            var timeline = EtlScatterTimelineMapper.Map(store.GetSnapshot());
+            var point = timeline.Points.Single();
             Assert.Multiple(() =>
             {
-                Assert.That(timeline.Groups.Select(group => group.Id),
-                    Is.EqualTo(new[] { "parallel", "fifo", "cache" }));
-                Assert.That(item.Type, Is.EqualTo("range"));
-                Assert.That(item.ClassName, Is.EqualTo("tplq-status-failed"));
-                Assert.That(item.IsRunning, Is.False);
-                Assert.That(item.Title, Does.Contain("&lt;strong&gt;"));
-                Assert.That(item.Title, Does.Contain("&lt;script&gt;"));
-                Assert.That(item.Title, Does.Not.Contain("<script>"));
+                Assert.That(timeline.Queues.Select(queue => queue.GroupId), Is.EqualTo(new[] { "parallel", "fifo", "cache" }));
+                Assert.That(point.JobId, Is.EqualTo(jobInfo.Id));
+                Assert.That(point.QueueDisplayName, Is.EqualTo("CacheQ"));
+                Assert.That(point.Status, Is.EqualTo("failed"));
+                Assert.That(point.EventType, Is.EqualTo(nameof(JobEventStatus.Failed)));
+                Assert.That(point.ActualTimestamp, Is.EqualTo(observedAt));
             });
         }
 
+        [Test]
+        public void ScatterTimeline_UsesFixedSignedReferenceAndQueueSelection()
+        {
+            var store = CreateStore();
+            var before = Job(Guid.NewGuid(), "Before reference", ParallelQueueId);
+            var after = Job(Guid.NewGuid(), "After reference", ParallelQueueId);
+            var reference = Utc(10, 15, 1);
+
+            store.Apply(Event(JobEventStatus.Enqueued, before, Utc(10, 15, 0)));
+            store.Apply(Event(JobEventStatus.Enqueued, after, Utc(10, 15, 2)));
+
+            var timeline = EtlScatterTimelineMapper.Map(
+                store.GetSnapshot(),
+                new HashSet<string>(StringComparer.Ordinal) { "parallel" },
+                reference,
+                pastWindowMilliseconds: 5_000,
+                futureWindowMilliseconds: 5_000);
+            var points = timeline.Points.OrderBy(point => point.DisplayedX).ToArray();
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(timeline.Queues.Select(queue => queue.GroupId), Is.EqualTo(new[] { "parallel" }));
+                Assert.That(points.Select(point => point.DisplayedX), Is.EqualTo(new[] { -1_000d, 1_000d }));
+                Assert.That(points[0].ActualTimestamp, Is.EqualTo(Utc(10, 15, 0)));
+                Assert.That(points[1].ActualTimestamp, Is.EqualTo(Utc(10, 15, 2)));
+            });
+        }
+
+        [Test]
+        public void ExecutionChannel_SurvivesLateWaitingEvents_AndSnapshotIsDetached()
+        {
+            // Arrange
+            var store = CreateStore();
+            var info = Job(Guid.NewGuid(), "channel test", ParallelQueueId);
+            var time = Utc(10, 15, 0);
+            store.Apply(Event(JobEventStatus.Enqueued, info, time));
+            var waiting = store.GetSnapshot();
+
+            // Act: terminal metadata may arrive before the earlier start event.
+            store.Apply(new ChannelEvent(JobEventStatus.Successed, info, time.AddSeconds(2), 2));
+            store.Apply(Event(JobEventStatus.Enqueued, info, time.AddMilliseconds(1)));
+            store.Apply(new ChannelEvent(JobEventStatus.Running, info, time.AddSeconds(1), 2));
+            var snapshot = store.GetSnapshot();
+
+            // Assert
+            Assert.That(waiting.Jobs.Single().ExecutionChannel, Is.Null);
+            Assert.That(snapshot.Jobs.Single().ExecutionChannel, Is.EqualTo(2));
+            Assert.That(snapshot.Jobs.Single().Status, Is.EqualTo("completed"));
+            Assert.That(snapshot.Queues.Single(q => q.GroupId == "parallel").MaxParallelism, Is.EqualTo(3));
+            var dto = JobMonitorMapper.Map(snapshot);
+            Assert.That(dto.Jobs.Single().Channel, Is.EqualTo(2));
+            Assert.That(dto.Jobs.Single().ObservedAt, Is.EqualTo(time));
+        }
+
+        [Test]
+        public void InvalidRuntimeChannel_IsRejectedBeforeMutatingProjection()
+        {
+            // Arrange
+            var store = CreateStore();
+            var info = Job(Guid.NewGuid(), "invalid channel", ParallelQueueId);
+            // Act / Assert
+            Assert.Throws<ArgumentOutOfRangeException>(() => store.Apply(
+                new ChannelEvent(JobEventStatus.Running, info, Utc(10, 15, 0), 3)));
+            Assert.That(store.GetSnapshot().Jobs, Is.Empty);
+        }
+
+        [Test]
+        public void LegacyEvents_RemainUnassigned_AndTransportContainsOnlyPresentationValues()
+        {
+            // Arrange
+            var store = CreateStore();
+            store.Apply(Event(JobEventStatus.Canceled, Job(Guid.NewGuid(), "legacy", FifoQueueId), Utc(10, 15, 0)));
+            // Act
+            var dto = JobMonitorMapper.Map(store.GetSnapshot());
+            var json = System.Text.Json.JsonSerializer.Serialize(dto,
+                new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            // Assert
+            Assert.That(dto.Jobs.Single().Channel, Is.Null);
+            Assert.That(dto.Jobs.Single().State, Is.EqualTo("cancelled"));
+            Assert.That(json, Does.Contain("\"channel\":null"));
+            Assert.That(json, Does.Not.Contain("jobInfo"));
+            Assert.That(json, Does.Not.Contain("exception"));
+        }
+
+        private sealed class ChannelEvent : FakeJobEvent, IJobExecutionEvent
+        {
+            public ChannelEvent(JobEventStatus status, IJobInfo info, DateTimeOffset time, int channel)
+                : base(status, info, time.UtcDateTime, 0, null) => ExecutionChannel = channel;
+            public int? ExecutionChannel { get; }
+        }
         private static EtlExecutionProjectionStore CreateStore()
         {
             var descriptors = new[]
@@ -357,7 +498,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                     ParallelQueueId,
                     "parallel",
                     "ParallelQ",
-                    Order: 0),
+                    Order: 0, MaxParallelism: 3),
                 new EtlQueueDescriptor(
                     AvailableQueue.FIFO,
                     FifoQueueId,
@@ -406,7 +547,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             return new DateTimeOffset(2026, 7, 29, hour, minute, second, TimeSpan.Zero);
         }
 
-        private sealed class FakeJobEvent : IJobEvent
+        private class FakeJobEvent : IJobEvent
         {
             public FakeJobEvent(
                 JobEventStatus status,

@@ -1,15 +1,39 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
-
+<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\..\TplQueue.Adapter\src\Fmacias.TplQueue.Microsoft.DependencyInjection\Fmacias.TplQueue.Microsoft.DependencyInjection.csproj" />
     <ProjectReference Include="..\..\..\TplQueue.Core\src\Fmacias.TplQueue.Core\Fmacias.TplQueue.Core.csproj" />
     <ProjectReference Include="..\TplQueue.Sample.Etl.Contracts\TplQueue.Sample.Etl.Contracts.csproj" />
     <ProjectReference Include="..\TplQueue.Sample.Etl\TplQueue.Sample.Etl.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Content Remove="wwwroot\job-monitor\**\*" />
+    <_JobMonitorSource Include="..\..\tools\TplQueue.JobMonitor\src\**\*" Destination="wwwroot\job-monitor\src\%(RecursiveDir)%(Filename)%(Extension)" />
+    <_JobMonitorSource Include="..\..\tools\TplQueue.JobMonitor\integrations\blazor\**\*" Destination="wwwroot\job-monitor\integrations\blazor\%(RecursiveDir)%(Filename)%(Extension)" />
+    <_JobMonitorSource Include="..\..\tools\TplQueue.JobMonitor\LICENSE" Destination="wwwroot\job-monitor\LICENSE" />
+  </ItemGroup>
+  <ItemDefinitionGroup>
+    <_JobMonitorSource>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </_JobMonitorSource>
+  </ItemDefinitionGroup>
+  <ItemGroup Condition="'$(Configuration)' == 'Debug'">
+    <_JobMonitorSource Include="..\..\tools\TplQueue.JobMonitor\tests\blazor.*" Destination="wwwroot\job-monitor\tests\%(Filename)%(Extension)" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+  <!-- Static web asset discovery requires physical files under its content root.
+       Synchronize the sole source tree before discovery, including the first build. -->
+  <Target Name="SynchronizeJobMonitorAssets" BeforeTargets="ResolveProjectStaticWebAssets;AssignTargetPaths">
+    <ItemGroup>
+      <_JobMonitorStale Include="wwwroot\job-monitor\**\*" Exclude="@(_JobMonitorSource->'%(Destination)')" />
+    </ItemGroup>
+    <Delete Files="@(_JobMonitorStale)" />
+    <Copy SourceFiles="@(_JobMonitorSource)" DestinationFiles="@(_JobMonitorSource->'%(Destination)')" SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <Content Include="@(_JobMonitorSource->'%(Destination)')" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
 </Project>

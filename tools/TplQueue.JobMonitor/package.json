@@ -1,0 +1,14 @@
+{
+  "name": "tplqueue-job-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Standalone channel-based job timeline prototype for TplQueue",
+  "scripts": {
+    "start": "node demo/server.mjs",
+    "test": "node --test tests/*.test.js",
+    "check": "node scripts/check.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
