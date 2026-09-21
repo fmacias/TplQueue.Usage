@@ -16,7 +16,7 @@ function timeTicks(start, end, pixelsPerMs, plotTop) {
 function groupMarkers(nodes, config, start, end) {
   const lanes = new Map(), markers = [], clusters = [];
   for (const node of nodes) {
-    if (node.time < start || node.time > end) continue;
+    if (node.hidden || node.time < start || node.time > end) continue;
     const key = JSON.stringify([node.queueId, node.channel]);
     if (!lanes.has(key)) lanes.set(key, []);
     lanes.get(key).push(node);
@@ -59,16 +59,22 @@ export function layout(model, input = {}) {
   const markerSize = Math.min(config.maxMarkerSize, config.minMarkerSize * config.scale);
   let x = config.gutter;
   const queues = model.queues.map(q => {
-    const hasUnassigned = model.jobs.some(j => j.queueId === q.id && j.channel === null);
-    const slots = q.maxParallelism + (hasUnassigned ? 1 : 0);
-    const minimumWidth = slots * channelWidth + config.queuePadding * 2;
-    const width = Math.max(minimumWidth, input.widths?.[q.id] ?? 0);
-    const slotWidth = (width - config.queuePadding * 2) / slots;
-    const queue = { ...q, x, width, minimumWidth, slotWidth, hasUnassigned,
-      label: width < q.name.length * 8 + 16 ? q.name.slice(0, 1) : q.name,
+    const unassigned = model.jobs.filter(j => j.queueId === q.id && j.channel === null);
+    const hasUnassigned = unassigned.length > 0;
+    const unassignedExpanded = hasUnassigned && (input.expandedUnassigned?.has(q.id) ?? false);
+    const unassignedWidth = hasUnassigned ? (unassignedExpanded ? config.unassignedExpandedWidth : config.unassignedCollapsedWidth) : 0;
+    const baseMinimumWidth = q.maxParallelism * channelWidth + config.queuePadding * 2;
+    const baseWidth = Math.max(baseMinimumWidth, input.widths?.[q.id] ?? 0);
+    const width = baseWidth + unassignedWidth, minimumWidth = baseMinimumWidth + unassignedWidth;
+    const slotWidth = (baseWidth - config.queuePadding * 2) / q.maxParallelism;
+    const queue = { ...q, x, width, baseWidth, minimumWidth, slotWidth, hasUnassigned,
+      unassignedExpanded, unassignedWidth, unassignedLeft: x + baseWidth,
+      unassignedCount: unassigned.length,
+      unassignedVisibleCount: unassigned.filter(j => j.time >= startTime && j.time <= referenceTime).length,
+      label: baseWidth < q.name.length * 8 + 16 ? q.name.slice(0, 1) : q.name,
       channels: Array.from({ length: q.maxParallelism }, (_, i) => ({ index: i,
         x: x + config.queuePadding + (i + .5) * slotWidth })),
-      unassignedX: x + config.queuePadding + (q.maxParallelism + .5) * slotWidth };
+      unassignedX: x + baseWidth + unassignedWidth / 2 };
     x += width;
     return queue;
   });
@@ -78,7 +84,8 @@ export function layout(model, input = {}) {
     const trueY = referenceY + (job.time - referenceTime) * pixelsPerMs;
     return { ...job, kind: 'job', x: job.channel === null ? queue.unassignedX : queue.channels[job.channel].x,
       y: trueY, trueY, timeLabel: new Date(job.time).toISOString().slice(11, 23),
-      size: markerSize, targetSize: config.targetSize, unassigned: job.channel === null };
+      size: markerSize, targetSize: config.targetSize, unassigned: job.channel === null,
+      hidden: job.channel === null && !queue.unassignedExpanded };
   });
   const { markers, clusters } = groupMarkers(nodes, config, startTime, referenceTime);
   const byId = new Map(nodes.map(n => [n.id, n])), representatives = new Map();

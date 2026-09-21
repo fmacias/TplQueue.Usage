@@ -72,6 +72,7 @@ alignment findings, and suggestions. Do not duplicate it in another design guide
 - The current frontend is `tools/TplQueue.JobMonitor`, a reusable JavaScript Web Component with a small Razor/JS snapshot bridge. ScatterChart and vis-timeline are retired.
 - The full viewer uses vertical time, real logical execution channels and explicit Unassigned placement for null channels. Root identity never determines channel placement. There is no permanent details panel.
 - The overview shows five seconds ending at the bottom reference. Square centers retain exact timestamps; collisions use count markers with temporary interval inspection, never timestamp displacement. Time zoom must not widen channels. Keep the fixed left UTC ruler and keyboard access to grouped jobs.
+- Assigned positions use the backend's channel-bearing Started timestamp. Preserve enqueue time as metadata. Keep jobs without that channel/start pair in a collapsible Unassigned strip; never substitute Running or terminal timestamps for channel acquisition. Search must reveal collapsed unassigned jobs.
 - Keep runtime behavior in C#. Preserve immutable snapshots, observer isolation, InvokeAsync dispatch, coalesced updates and async subscription/interop disposal.
 - `IJobExecutionEvent` is optional additive observer metadata. Do not break existing IJobEvent implementations or fabricate channels for legacy events.
 - Keep model validation, graph traversal, layout, time control and theme tokens outside the mechanical SVG renderer.

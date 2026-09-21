@@ -39,11 +39,24 @@ Give the element an explicit height. Snapshots replace data atomically. Invalid
 IDs, timestamps, queue references and channels are rejected before changing the
 view. IDs must be nonempty strings; timestamps must specify a timezone.
 `channel` is required and is either null or an integer in `0..maxParallelism-1`.
-Null jobs occupy an explicitly labeled **Unassigned** area outside the numbered
-execution channels. Nothing maps null to channel zero.
+Null jobs belong to a separate **Unassigned** strip outside the numbered execution
+channels. Its label is always U, with the full Unassigned name in the hover tooltip
+and accessible name. It starts collapsed with a chevron and total count; click or press
+Enter/Space to expand it. Its tooltip also gives the count inside the visible time
+window. Search automatically expands the strip and navigates to the selected job.
+Nothing maps null to channel zero. Expansion survives snapshot updates; empty
+strips disappear. Expanded strips retain the timeline's real timestamp mapping.
 
 The optional `IJobExecutionEvent` interface supplies the sample's runtime channel.
 Existing `IJobEvent` implementations remain valid and project as unassigned.
+The Blazor mapper assigns a channel position only when its channel-bearing Started
+event is known, and uses that event's timestamp as `observedAt`. Enqueue time stays
+in `metadata.enqueuedAt`; `metadata.timestampSource` names Started, Enqueued or
+FirstObserved. A Running/terminal event without the Started timestamp stays
+Unassigned until the missing event arrives. This avoids placing sequential
+executions at a shared enqueue time. Other snapshot producers must likewise supply
+actual channel-acquisition time for assigned jobs; the JavaScript component cannot
+recover a Started event from an arbitrary observation timestamp.
 Terminal snapshots retain their captured channel after capacity is released.
 Root identity never controls channel placement. Only `dependsOn` creates edges;
 missing endpoints remain unresolved. State aliases `queued` and `canceled`
@@ -102,13 +115,17 @@ the time mapping; a five-second overview does not resolve every millisecond into
 a separate physical display pixel.
 
 Default lane pitch is 40 pixels, independent of time zoom, with 8-pixel queue
-padding: three assigned channels use 136 pixels. Unassigned adds another column,
-marked U with an explicit tooltip and accessible label. Resizing cannot violate
-the minimum pitch. Theme values remain configurable through CSS variables.
+padding: three assigned channels use 136 pixels. A nonempty Unassigned strip adds
+36 pixels collapsed or 40 expanded by default. Expanding a strip does not move
+its queue's assigned channel centers. Resizing cannot violate the minimum pitch.
+Theme values remain configurable through CSS variables.
 
 Jobs whose same-lane targets would overlap are represented by one distinct
 28-pixel count marker with a bracket spanning the group's actual time range.
-Grouping includes an 8-pixel gap and never shifts individual timestamps.
+Grouping includes an 8-pixel gap and never shifts individual timestamps. A count
+means several events within the available display resolution, not simultaneous
+ownership of an execution channel. Correct start timestamps reduce unnecessary
+grouping but sequential starts in the same millisecond may still coincide.
 Select a count marker by mouse or Enter/Space to inspect a shorter interval in
 the same viewer. A temporary, scrollable list permits individual selection,
 including jobs at identical times that no zoom can separate. Back to 5 seconds
@@ -129,7 +146,10 @@ time; internal group edges are hidden until their endpoints separate. Endpoints
 outside the visible interval are not drawn. General edge crossings remain possible.
 
 The demo includes three queue types, a 15-channel queue, a root with three
-dependencies, cross-queue edges, dense same-channel points and all requested states.
+dependencies, sequential starts and all requested states. Synthetic arrivals first
+appear Unassigned and move to a channel in a later snapshot with enqueue metadata
+preserved. The browser harness uses a separate dense-timing fixture for close and
+same-millisecond sequential events.
 Large graphs remain scrollable; general edge crossings are possible. Snapshots
 are intended to be bounded by the host; this is not a durable event history or an
 unlimited graph renderer. No incremental append API is provided.

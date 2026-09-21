@@ -6,7 +6,10 @@ public sealed record JobMonitorSnapshot(IReadOnlyList<JobMonitorQueue> Queues, I
 /// <summary>Queue identity and its configured execution capacity.</summary>
 public sealed record JobMonitorQueue(string Id, string Name, int MaxParallelism);
 
-/// <summary>One observed job. A null channel explicitly means no execution slot is known.</summary>
+/// <summary>
+/// One observed job. Assigned positions use a captured Started event timestamp.
+/// A null channel means the channel or its acquisition timestamp is not yet known.
+/// </summary>
 public sealed record JobMonitorJob(string Id, string? RootJobId, string Name, string Description,
     string QueueId, int? Channel, DateTimeOffset ObservedAt, string State, double? DurationMs,
     IReadOnlyList<string> DependsOn, IReadOnlyDictionary<string, string> Metadata, bool IsRoot);
@@ -19,18 +22,30 @@ internal static class JobMonitorMapper
         ArgumentNullException.ThrowIfNull(snapshot);
         return new JobMonitorSnapshot(
             snapshot.Queues.Select(q => new JobMonitorQueue(q.GroupId, q.DisplayName, q.MaxParallelism)).ToArray(),
-            snapshot.Jobs.Select(j => new JobMonitorJob(
-                j.JobId.ToString(), j.RootJobId?.ToString(), j.Name,
-                string.Empty, // The current observer contract supplies no description.
-                j.QueueGroupId, j.ExecutionChannel, j.FirstObservedAt,
-                j.Status switch { "queued" => "waiting", "canceled" => "cancelled", "running" when j.RetryCount > 0 => "retried", _ => j.Status },
-                j.StartedAt.HasValue && j.EndedAt.HasValue ? Math.Max(0, (j.EndedAt.Value - j.StartedAt.Value).TotalMilliseconds) : null,
-                j.DependencyJobIds.Select(id => id.ToString()).ToArray(),
-                new Dictionary<string, string>
-                {
-                    ["event"] = j.LastEventType,
-                    ["retryCount"] = j.RetryCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    ["durationSource"] = "observer lifecycle timestamps"
-                }, j.RootJobId == j.JobId)).ToArray());
+            snapshot.Jobs.Select(MapJob).ToArray());
+    }
+
+    /// <summary>Pairs a channel with its real acquisition time, preserving enqueue time as metadata.</summary>
+    private static JobMonitorJob MapJob(EtlJobSnapshot job)
+    {
+        var assigned = job.ExecutionChannel.HasValue && job.ChannelStartedAt.HasValue;
+        var metadata = new Dictionary<string, string>
+        {
+            ["event"] = job.LastEventType,
+            ["retryCount"] = job.RetryCount.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["durationSource"] = "observer lifecycle timestamps",
+            ["timestampSource"] = assigned ? "Started" : job.EnqueuedAt.HasValue ? "Enqueued" : "FirstObserved"
+        };
+        if (job.EnqueuedAt.HasValue)
+            metadata["enqueuedAt"] = job.EnqueuedAt.Value.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+
+        return new JobMonitorJob(
+            job.JobId.ToString(), job.RootJobId?.ToString(), job.Name,
+            string.Empty, // The current observer contract supplies no description.
+            job.QueueGroupId, assigned ? job.ExecutionChannel : null,
+            assigned ? job.ChannelStartedAt!.Value : job.EnqueuedAt ?? job.FirstObservedAt,
+            job.Status switch { "queued" => "waiting", "canceled" => "cancelled", "running" when job.RetryCount > 0 => "retried", _ => job.Status },
+            job.StartedAt.HasValue && job.EndedAt.HasValue ? Math.Max(0, (job.EndedAt.Value - job.StartedAt.Value).TotalMilliseconds) : null,
+            job.DependencyJobIds.Select(id => id.ToString()).ToArray(), metadata, job.RootJobId == job.JobId);
     }
 }

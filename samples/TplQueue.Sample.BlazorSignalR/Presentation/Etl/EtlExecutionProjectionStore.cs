@@ -50,9 +50,14 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
             // A late pre-execution event must never erase captured execution identity.
             if (channel.HasValue && (job.ChannelObservedAt == null || ToOffset(jobEvent.Timestamp) >= job.ChannelObservedAt))
             {
+                if (job.ExecutionChannel != channel) job.ChannelStartedAt = null;
                 job.ExecutionChannel = channel;
                 job.ChannelObservedAt = ToOffset(jobEvent.Timestamp);
             }
+            // Running/terminal metadata cannot substitute for the time capacity was acquired.
+            // A delayed Started event can enrich the same channel without regressing status.
+            if (jobEvent.Status == JobEventStatus.Started && channel.HasValue && job.ExecutionChannel == channel)
+                job.ChannelStartedAt = Earlier(job.ChannelStartedAt, ToOffset(jobEvent.Timestamp));
             CaptureDependencies(job, jobEvent.JobInfo);
             ApplyLifecycle(job, jobEvent);
 
@@ -333,6 +338,7 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
         public string? Error { get; set; }
         public int? ExecutionChannel { get; set; }
         public DateTimeOffset? ChannelObservedAt { get; set; }
+        public DateTimeOffset? ChannelStartedAt { get; set; }
 
         public EtlJobSnapshot ToSnapshot() => new(
             JobId,
@@ -350,6 +356,7 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
             Error,
             LastEventType,
             LastEventAt,
-            ExecutionChannel);
+            ExecutionChannel,
+            ChannelStartedAt);
     }
 }

@@ -14,7 +14,8 @@ viewer.setData(sampleData()); viewer.setReferenceTime(reference); await frame();
 await check('dark default and all logical channels', () => {
   assert(getComputedStyle(viewer).getPropertyValue('--jm-bg').trim()==='#1e1e1e','dark theme');
   assert(viewer.shadowRoot.querySelectorAll('.channel-line').length===21,'channel count');
-  assert(viewer.shadowRoot.querySelectorAll('.unassigned-line').length===1,'explicit unassigned area');
+  assert(viewer.shadowRoot.querySelectorAll('.unassigned-toggle').length===1,'explicit unassigned area');
+  assert(!viewer.shadowRoot.querySelector('.unassigned-line'),'unassigned collapsed initially');
 });
 await check('horizontal overflow retains dense channels', () => {
   const viewport=viewer.shadowRoot.querySelector('.viewport'); assert(viewport.scrollWidth>viewport.clientWidth,'horizontal overflow');
@@ -82,6 +83,7 @@ await check('five seconds, compact channels, straight connectors and visible tim
   assert([...viewer.shadowRoot.querySelectorAll('.dependency')].every(p=>!/[CQ]/.test(p.getAttribute('d'))),'straight paths');
 });
 await check('close timestamps expand and returning restores the exact overview', async () => {
+  viewer.setData(sampleData({denseTiming:true})); viewer.setReferenceTime(reference); await frame();
   const before=viewer.referenceTime;
   const cluster=[...viewer.shadowRoot.querySelectorAll('[data-cluster-id]')].find(n=>n.getAttribute('data-cluster-id').includes('dense-follow-up'));
   assert(cluster,'near-time count marker');
@@ -132,6 +134,40 @@ await check('pause and live controls preserve the five-second overview', async (
   viewer.followLive(); await frame();
   assert(viewer.visibleWindowMs===5000 && viewer.isFollowingLive,'live resets overview');
   viewer.setData(sampleData()); viewer.setReferenceTime(reference);
+});
+await check('unassigned strip expands by keyboard without moving execution channels', async () => {
+  viewer.clearFocus(); await frame();
+  const getToggle=()=>viewer.shadowRoot.querySelector('[data-unassigned-id="cache"]');
+  const before=[...viewer.shadowRoot.querySelectorAll('.channel-line')].map(n=>n.getAttribute('x1'));
+  getToggle().focus(); getToggle().dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await frame();
+  assert(getToggle().getAttribute('aria-expanded')==='true','expanded');
+  assert(getToggle().querySelector('.channel-label').textContent==='U','compact label when expanded');
+  assert(getToggle().querySelector('title').textContent.startsWith('Unassigned:'),'full hover tooltip');
+  assert(getToggle().getAttribute('aria-label').includes('Unassigned'),'accessible full name');
+  assert(viewer.shadowRoot.querySelector('[data-job-id="waiting-batch"]'),'waiting job revealed');
+  // The queue being expanded retains its assigned centers; subsequent queues move right.
+  assert([...viewer.shadowRoot.querySelectorAll('.channel-line')].slice(0,6).every((n,i)=>n.getAttribute('x1')===before[i]),'assigned centers stable');
+  viewer.setData(sampleData()); await frame();
+  assert(getToggle().getAttribute('aria-expanded')==='true','expansion survives snapshots');
+  getToggle().dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true})); await frame();
+  assert(!viewer.shadowRoot.querySelector('[data-job-id="waiting-batch"]'),'collapse hides only unassigned markers');
+  assert(getToggle().querySelector('.channel-label').textContent==='U','compact label when collapsed');
+  assert(viewer.shadowRoot.activeElement===getToggle(),'keyboard focus retained');
+});
+await check('search reveals unassigned jobs and a Started update moves one job into its actual lane', async () => {
+  viewer.focusJob('waiting-batch'); await frame();
+  assert(viewer.shadowRoot.querySelector('[data-unassigned-id="cache"]').getAttribute('aria-expanded')==='true','search auto-expands');
+  const snapshot=sampleData(), job=snapshot.jobs.find(j=>j.id==='waiting-batch');
+  const enqueueTime=job.observedAt;
+  job.channel=0; job.observedAt='2026-09-17T11:59:59.800Z'; job.state='running';
+  job.metadata={...job.metadata,enqueuedAt:enqueueTime,timestampSource:'Started'};
+  viewer.setData(snapshot); await frame();
+  const nodes=viewer.shadowRoot.querySelectorAll('[data-job-id="waiting-batch"]');
+  assert(nodes.length===1 && viewer.selectedJobId==='waiting-batch','one job, selection preserved');
+  assert(!viewer.shadowRoot.querySelector('[data-unassigned-id="cache"]'),'empty waiting strip removed');
+  assert(nodes[0].querySelector('title').textContent.includes('Channel: 0'),'actual channel');
+  assert(viewer.shadowRoot.querySelector('.exact-time').textContent==='11:59:59.800','Started coordinate');
+  assert(nodes[0].querySelector('title').textContent.includes(enqueueTime),'enqueue retained as metadata');
 });
 document.querySelector('#summary').textContent=`${passed} passed; ${failed} failed`;
 document.documentElement.dataset.result = failed ? 'failed' : 'passed';

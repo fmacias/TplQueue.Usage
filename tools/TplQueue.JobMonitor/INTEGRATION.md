@@ -5,6 +5,9 @@ five-second overview ending at the bottom reference, exact square centers, count
 markers instead of displacement, and temporary interval inspection. See the
 [component README](README.md) for current configuration and interaction behavior.
 The host continues to synchronize the shared assets; do not edit generated copies.
+Assigned `observedAt` values now come from channel-bearing Started events. Keep
+enqueue time in metadata and jobs without that start/channel pair in the collapsible
+Unassigned strip. See the maintained guide for late-event and expansion behavior.
 
 ## 1. Goal
 

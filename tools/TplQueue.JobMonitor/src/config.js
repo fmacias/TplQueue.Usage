@@ -1,7 +1,8 @@
 export const defaults = Object.freeze({ scale: 1, windowMs: 5000, channelWidth: 40,
   minChannelWidth: 40, minMarkerSize: 2, maxMarkerSize: 12, targetSize: 24,
   clusterSize: 28, markerGap: 8, headerHeight: 56, bottomPadding: 20,
-  gutter: 124, queuePadding: 8, liveLagMs: 0, maxSearchResults: 30 });
+  gutter: 124, queuePadding: 8, liveLagMs: 0, maxSearchResults: 30,
+  unassignedCollapsedWidth: 36, unassignedExpandedWidth: 40 });
 
 export function options(input = {}) {
   const value = { ...defaults, ...input };
@@ -20,5 +21,7 @@ export function options(input = {}) {
   value.headerHeight = Math.max(56, value.headerHeight);
   value.bottomPadding = Math.max(value.clusterSize / 2 + 4, value.bottomPadding);
   value.queuePadding = Math.max(8, value.queuePadding);
+  value.unassignedCollapsedWidth = Math.max(36, value.unassignedCollapsedWidth);
+  value.unassignedExpandedWidth = Math.max(40, value.unassignedExpandedWidth, value.minChannelWidth);
   return value;
 }

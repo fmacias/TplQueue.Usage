@@ -43,8 +43,12 @@ terminal events, so asynchronous delivery remains correct after capacity reuse.
 No scheduling, retry, cancellation, dependency or cache-acknowledgment semantics
 are assigned to the frontend. Implementation details stay in private Core docs.
 
-Queued jobs and legacy events without that metadata project with channel null.
-They appear in an explicit Unassigned area outside the queue's numbered channels.
+Queued jobs and events without both channel metadata and a captured channel-bearing
+Started event project with channel null. They appear in a collapsible Unassigned
+strip outside the queue's numbered channels. The strip starts collapsed, reports
+the total count, and can be expanded by mouse or keyboard. Its tooltip distinguishes
+the total from the count in the visible time window. Search reveals older waiting
+jobs and expands their strip automatically. Empty strips disappear.
 A late pre-execution event cannot erase a known channel. The projection rejects
 out-of-range channels before mutating state and keeps detached snapshots.
 Queue MaxParallelism is read from the configured queue instances.
@@ -59,10 +63,15 @@ Metadata includes observer event type, retry count and duration provenance.
 Raw exceptions and payloads are not passed to JavaScript. The projection's
 existing error summary remains available to C# consumers.
 
-Node time uses FirstObservedAt; lifecycle changes do not replace it with receipt
-time. Duration is derived from observer start/end timestamps and is labeled as
-such. Root identity can be backfilled by a root-success event; it never places
-jobs into channels. Only explicit dependencies create edges.
+Assigned node time uses ChannelStartedAt, captured only from a channel-bearing
+Started event. Running, retry and terminal observations do not substitute their
+timestamps for channel acquisition. A late Started event enriches the position
+without regressing lifecycle state. Until that event is known, the node stays
+Unassigned at EnqueuedAt (or FirstObservedAt when enqueue is unknown). On assignment
+the same job moves to its channel and real start time; its enqueue time remains
+in metadata. Duration still uses observer lifecycle timestamps and is labeled as
+such. Root identity never places jobs into channels. Only explicit dependencies
+create edges. No scheduler or observer contract change is required.
 
 The monitor provides dark theme tokens, search by name/ID/description, connected
 graph focus, selection, bounded hover metadata, zoom, draggable/keyboard queue

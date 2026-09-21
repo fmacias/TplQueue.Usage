@@ -6,7 +6,10 @@ backend starts two three-job roots on each queue independently of browsers.
 The full-area `<job-queue-timeline>` Web Component displays actual logical
 execution channels, vertical time, explicit dependency edges, search, graph focus,
 zoom and history navigation. Waiting jobs without a runtime channel are explicitly
-unassigned. Hover shows bounded metadata; there is no permanent details panel.
+unassigned in a collapsible strip. Assigned positions use channel-bearing Started
+event timestamps, with enqueue time retained as metadata. Jobs missing that start
+event remain Unassigned until it arrives. Hover shows bounded metadata; there is
+no permanent details panel.
 
 See the maintained [architecture and contract guide](../../docs/architecture/blazor-consumer-sample.md)
 and [standalone component guide](../../tools/TplQueue.JobMonitor/README.md).

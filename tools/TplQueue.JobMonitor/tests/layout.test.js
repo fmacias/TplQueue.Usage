@@ -83,7 +83,7 @@ test('clusters are deterministic, lane-local and do not overlap other markers', 
   const reversed = layout(normalize(data([...jobs].reverse())), { referenceTime: end });
   assert.deepEqual(view.clusters[0].members.map(n => n.id), ['a', 'b']);
   assert.equal(view.clusters[0].id, reversed.clusters[0].id);
-  assert.equal(view.markers.length, 4);
+  assert.equal(view.markers.length, 3); // Unassigned is collapsed by default.
   const sameLane = view.markers.filter(n => n.channel === 0).sort((a,b) => a.y - b.y);
   assert.ok(sameLane[1].y - sameLane[0].y >= 32);
 });
@@ -153,4 +153,32 @@ test('normalization detaches metadata and rejects duplicate IDs and timezone-fre
   assert.match(model.jobs[0].metadataText, /before/);
   assert.throws(() => normalize(data([job('a', 0), job('a', 1)])), /duplicate/i);
   assert.throws(() => normalize(data([job('a', 0, { observedAt: '2026-09-17T12:00:00' })])), /timestamp/i);
+});
+
+test('unassigned is a separate collapsible strip without moving assigned channel centers', () => {
+  const model = normalize(data([job('assigned', 0), job('waiting', null, { state: 'waiting' })]));
+  const collapsed = layout(model, { referenceTime: Date.parse(time) });
+  const expanded = layout(model, { referenceTime: Date.parse(time), expandedUnassigned: new Set(['q']) });
+  assert.equal(collapsed.queues[0].unassignedCount, 1);
+  assert.equal(collapsed.queues[0].unassignedExpanded, false);
+  assert.equal(collapsed.markers.length, 1);
+  assert.equal(expanded.markers.length, 2);
+  assert.equal(expanded.queues[0].unassignedExpanded, true);
+  assert.equal(expanded.queues[0].unassignedWidth, expanded.queues[0].slotWidth);
+  assert.ok(expanded.queues[0].width > collapsed.queues[0].width);
+  assert.deepEqual(collapsed.queues[0].channels, expanded.queues[0].channels);
+  assert.ok(expanded.nodes.find(n => n.id === 'waiting').x > expanded.queues[0].channels.at(-1).x);
+  assert.equal(expanded.nodes.find(n => n.id === 'waiting').channel, null);
+});
+
+test('a backend waiting-to-started update removes the waiting marker and uses the new time', () => {
+  const queued = normalize(data([job('a', null, { state: 'waiting' })]));
+  const started = normalize(data([job('a', 1, { observedAt: '2026-09-17T12:00:01.000Z' })]));
+  const before = layout(queued, { referenceTime: Date.parse(time) + 2000, expandedUnassigned: new Set(['q']) });
+  const after = layout(started, { referenceTime: Date.parse(time) + 2000, expandedUnassigned: new Set(['q']) });
+  assert.equal(before.queues[0].unassignedCount, 1);
+  assert.equal(after.queues[0].unassignedCount, 0);
+  assert.equal(after.markers.length, 1);
+  assert.equal(after.markers[0].channel, 1);
+  assert.ok(after.markers[0].y > before.markers[0].y);
 });

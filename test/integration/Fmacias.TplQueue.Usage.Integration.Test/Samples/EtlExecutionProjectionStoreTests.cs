@@ -441,6 +441,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             store.Apply(new ChannelEvent(JobEventStatus.Successed, info, time.AddSeconds(2), 2));
             store.Apply(Event(JobEventStatus.Enqueued, info, time.AddMilliseconds(1)));
             store.Apply(new ChannelEvent(JobEventStatus.Running, info, time.AddSeconds(1), 2));
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, time.AddMilliseconds(500), 2));
             var snapshot = store.GetSnapshot();
 
             // Assert
@@ -450,7 +451,82 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             Assert.That(snapshot.Queues.Single(q => q.GroupId == "parallel").MaxParallelism, Is.EqualTo(3));
             var dto = JobMonitorMapper.Map(snapshot);
             Assert.That(dto.Jobs.Single().Channel, Is.EqualTo(2));
-            Assert.That(dto.Jobs.Single().ObservedAt, Is.EqualTo(time));
+            Assert.That(dto.Jobs.Single().ObservedAt, Is.EqualTo(time.AddMilliseconds(500)));
+            Assert.That(dto.Jobs.Single().Metadata["enqueuedAt"], Is.EqualTo(time.ToString("O")));
+        }
+
+        [Test]
+        public void Monitor_SeparatesSequentialStartsThatShareAnEnqueueTimestampAndChannel()
+        {
+            // Arrange
+            var store = CreateStore();
+            var time = Utc(10, 15, 0);
+            var first = Job(Guid.NewGuid(), "first", FifoQueueId);
+            var second = Job(Guid.NewGuid(), "second", FifoQueueId);
+            store.Apply(Event(JobEventStatus.Enqueued, first, time));
+            store.Apply(Event(JobEventStatus.Enqueued, second, time));
+            var waiting = JobMonitorMapper.Map(store.GetSnapshot());
+
+            // Act
+            store.Apply(new ChannelEvent(JobEventStatus.Started, first, time.AddSeconds(1), 0));
+            store.Apply(new ChannelEvent(JobEventStatus.Successed, first, time.AddMilliseconds(1500), 0));
+            store.Apply(new ChannelEvent(JobEventStatus.Started, second, time.AddSeconds(2), 0));
+            var mapped = JobMonitorMapper.Map(store.GetSnapshot()).Jobs;
+
+            // Assert
+            Assert.That(waiting.Jobs.All(j => j.Channel == null && j.ObservedAt == time), Is.True);
+            Assert.That(mapped.All(j => j.Channel == 0), Is.True);
+            Assert.That(mapped.Single(j => j.Name == "first").ObservedAt, Is.EqualTo(time.AddSeconds(1)));
+            Assert.That(mapped.Single(j => j.Name == "second").ObservedAt, Is.EqualTo(time.AddSeconds(2)));
+            Assert.That(mapped.All(j => j.Metadata["timestampSource"] == "Started"), Is.True);
+        }
+
+        [TestCase(JobEventStatus.Running)]
+        [TestCase(JobEventStatus.Successed)]
+        [TestCase(JobEventStatus.Failed)]
+        [TestCase(JobEventStatus.Canceled)]
+        public void Monitor_DoesNotInventStartTime_WhenChannelArrivesBeforeStarted(JobEventStatus status)
+        {
+            // Arrange
+            var store = CreateStore();
+            var info = Job(Guid.NewGuid(), "late start", ParallelQueueId);
+            var time = Utc(10, 15, 0);
+            store.Apply(Event(JobEventStatus.Enqueued, info, time));
+            store.Apply(new ChannelEvent(status, info, time.AddSeconds(2), 1));
+            var before = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single();
+
+            // Act
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, time.AddSeconds(1), 1));
+            var after = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single();
+
+            // Assert
+            Assert.That(before.Channel, Is.Null);
+            Assert.That(before.ObservedAt, Is.EqualTo(time));
+            Assert.That(before.Metadata["timestampSource"], Is.EqualTo("Enqueued"));
+            Assert.That(after.Channel, Is.EqualTo(1));
+            Assert.That(after.ObservedAt, Is.EqualTo(time.AddSeconds(1)));
+            Assert.That(after.State, Is.EqualTo(before.State));
+        }
+
+        [Test]
+        public void Monitor_StartPositionSurvivesLaterRunningAndLateEnqueueEvents()
+        {
+            // Arrange
+            var store = CreateStore();
+            var info = Job(Guid.NewGuid(), "stable start", ParallelQueueId);
+            var time = Utc(10, 15, 0);
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, time.AddSeconds(1), 2));
+
+            // Act
+            store.Apply(new ChannelEvent(JobEventStatus.Running, info, time.AddSeconds(3), 2));
+            store.Apply(Event(JobEventStatus.Enqueued, info, time));
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, time.AddSeconds(1), 2));
+            var mapped = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single();
+
+            // Assert
+            Assert.That(mapped.ObservedAt, Is.EqualTo(time.AddSeconds(1)));
+            Assert.That(mapped.Channel, Is.EqualTo(2));
+            Assert.That(mapped.Metadata["enqueuedAt"], Is.EqualTo(time.ToString("O")));
         }
 
         [Test]

@@ -12,6 +12,7 @@ export class JobQueueTimeline extends HTMLElement {
   #timer; #resize; #events; #frame; #view; #drag;
   #historyMin = 0; #historyMax = 1; #historyTarget = 0;
   #overview = null; #inspectionIds = null;
+  #expandedUnassigned = new Set();
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
@@ -56,7 +57,7 @@ export class JobQueueTimeline extends HTMLElement {
       const id = e.target.getAttribute?.('data-queue-id');
       if (!id) return;
       const queue = this.#view.queues.find(q => q.id === id);
-      this.#drag = { id, x: e.clientX, width: queue.width };
+      this.#drag = { id, x: e.clientX, width: queue.baseWidth };
       e.preventDefault();
     });
     listen(window, 'pointermove', e => {
@@ -82,6 +83,8 @@ export class JobQueueTimeline extends HTMLElement {
   setData(snapshot) {
     const model = normalize(snapshot);
     this.#model = model;
+    for (const id of this.#expandedUnassigned)
+      if (!model.queues.some(q => q.id === id)) this.#expandedUnassigned.delete(id);
     if (model.referenceTime != null) this.setReferenceTime(model.referenceTime);
     if (this.#selected && !model.jobs.some(j => j.id === this.#selected)) this.clearFocus();
     else if (this.#selected) this.#focused = connected(model, this.#selected);
@@ -111,6 +114,7 @@ export class JobQueueTimeline extends HTMLElement {
   focusJob(id) {
     const job = this.#model.jobs.find(j => j.id === id);
     if (!job) return false;
+    if (job.channel === null) this.#expandedUnassigned.add(job.queueId);
     this.#selected = id; this.#hovered = null; this.#focused = connected(this.#model, id);
     this.setReferenceTime(job.time + this.visibleWindowMs / 2);
     this.#draw(); this.#renderInspection();
@@ -174,8 +178,9 @@ export class JobQueueTimeline extends HTMLElement {
     }));
   }
   #click(e) {
-    const target = e.target.closest?.('[data-action],[data-job-id],[data-result],[data-cluster-id]');
+    const target = e.target.closest?.('[data-action],[data-job-id],[data-result],[data-cluster-id],[data-unassigned-id]');
     if (!target) return;
+    if (target.hasAttribute('data-unassigned-id')) { this.#toggleUnassigned(target.getAttribute('data-unassigned-id')); return; }
     if (target.hasAttribute('data-cluster-id')) { this.#inspectCluster(target.getAttribute('data-cluster-id')); return; }
     const id = target.getAttribute('data-job-id') ?? target.getAttribute('data-result');
     if (id) { this.focusJob(id); return; }
@@ -190,14 +195,20 @@ export class JobQueueTimeline extends HTMLElement {
       case 'out': this.#zoom(.5); break;
     }
   }
+  #toggleUnassigned(id) {
+    if (this.#expandedUnassigned.has(id)) this.#expandedUnassigned.delete(id);
+    else this.#expandedUnassigned.add(id);
+    this.#hovered = null; this.#schedule();
+  }
   #key(e) {
     const queueId = e.target.getAttribute?.('data-queue-id');
     if (queueId && ['ArrowLeft', 'ArrowRight'].includes(e.key)) {
       const queue = this.#view.queues.find(q => q.id === queueId);
-      this.#widths[queueId] = queue.width + (e.key === 'ArrowRight' ? 24 : -24); this.#schedule(); e.preventDefault();
+      this.#widths[queueId] = queue.baseWidth + (e.key === 'ArrowRight' ? 24 : -24); this.#schedule(); e.preventDefault();
     }
     if (['Enter', ' '].includes(e.key)) {
-      if (e.target.hasAttribute?.('data-job-id')) { this.focusJob(e.target.getAttribute('data-job-id')); e.preventDefault(); }
+      if (e.target.hasAttribute?.('data-unassigned-id')) { this.#toggleUnassigned(e.target.getAttribute('data-unassigned-id')); e.preventDefault(); }
+      else if (e.target.hasAttribute?.('data-job-id')) { this.focusJob(e.target.getAttribute('data-job-id')); e.preventDefault(); }
       else if (e.target.hasAttribute?.('data-cluster-id')) { this.#inspectCluster(e.target.getAttribute('data-cluster-id')); e.preventDefault(); }
     }
     if (e.key === 'Escape' && (this.#overview || this.#inspectionIds)) {
@@ -216,7 +227,7 @@ export class JobQueueTimeline extends HTMLElement {
   #draw() {
     const viewport = this.shadowRoot.querySelector('.viewport');
     this.#view = layout(this.#model, { ...this.#config, referenceTime: this.#reference,
-      height: Math.max(240, viewport.clientHeight - 18), widths: this.#widths });
+      height: Math.max(240, viewport.clientHeight - 18), widths: this.#widths, expandedUnassigned: this.#expandedUnassigned });
     render(this.shadowRoot.querySelector('.timeline'), this.#view, this.#selected, this.#focused,
       this.shadowRoot.querySelector('.time-ruler'), this.#hovered ?? this.#selected);
     this.shadowRoot.querySelector('.mode').textContent = `${this.#live ? 'LIVE' : 'HISTORY'} · ${this.#model.jobs.length} jobs${this.#view.missingEdges ? ` · ${this.#view.missingEdges} unresolved dependencies` : ''}`;
