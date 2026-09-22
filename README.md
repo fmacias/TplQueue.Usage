@@ -34,6 +34,7 @@ This repository focuses on runnable package-consumption samples, public integrat
 - [QueueObserverSignalRDashboard](samples/QueueObserverSignalRDashboard/README.md)
 - [TplQueue Blazor observable ETL sample](samples/TplQueue.Sample.BlazorSignalR/README.md)
 - [Blazor job monitor architecture and execution channels](docs/architecture/blazor-consumer-sample.md)
+- [Simulation use-case implementation plan](docs/development/simulation-use-case-plan.md)
 
 These samples are the canonical runnable examples cited by the product-repository docs.
 
