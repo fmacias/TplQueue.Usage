@@ -182,3 +182,78 @@ test('a backend waiting-to-started update removes the waiting marker and uses th
   assert.equal(after.markers[0].channel, 1);
   assert.ok(after.markers[0].y > before.markers[0].y);
 });
+
+test('enqueue history survives assignment with exact positions and a directed relation', () => {
+  const end = Date.parse(time) + 2000;
+  const input = data([job('a', 1, { observedAt: new Date(end - 1000).toISOString(), enqueuedAt: time })]);
+  const model = normalize(input);
+  const view = layout(model, { referenceTime: end, expandedUnassigned: new Set(['q']) });
+  const enqueue = view.nodes.find(n => n.phase === 'enqueue');
+  const execution = view.nodes.find(n => n.phase === 'execution');
+  assert.equal(model.jobs.length, 1);
+  assert.equal(view.queues[0].unassignedCount, 1);
+  assert.equal(view.markers.length, 2);
+  assert.equal(enqueue.id, execution.id);
+  assert.notEqual(enqueue.markerId, execution.markerId);
+  assert.equal(enqueue.channel, null);
+  assert.equal(enqueue.state, 'waiting');
+  assert.equal(enqueue.time, Date.parse(time));
+  assert.equal(execution.channel, 1);
+  assert.ok(Math.abs(execution.y - enqueue.y - 1000 * view.pixelsPerMs) < 1e-9);
+  assert.equal(view.edges.length, 1);
+  assert.equal(view.edges[0].kind, 'assignment');
+  assert.equal(view.edges[0].fromMarker, enqueue.markerId);
+  assert.equal(view.edges[0].toMarker, execution.markerId);
+  assert.match(view.edges[0].path, /^M .+ L /);
+  // Fresh snapshots carry the history; no browser-side event cache is required.
+  assert.deepEqual(layout(normalize(input), { referenceTime: end, expandedUnassigned: new Set(['q']) }), view);
+});
+
+test('assignment arrow ends outside the job outline so its direction stays visible', () => {
+  const model = normalize(data([job('a', 0, { enqueuedAt: time })]));
+  const view = layout(model, { referenceTime: Date.parse(time), expandedUnassigned: new Set(['q']) });
+  const execution = view.nodes.find(n => n.phase === 'execution');
+  const endpoint = view.edges[0].path.split(' L ')[1].split(' ').map(Number);
+  assert.equal(endpoint[0], execution.x + execution.targetSize / 2);
+  assert.equal(endpoint[1], execution.y);
+});
+
+test('waiting and legacy jobs are not duplicated; missing enqueue times are not invented', () => {
+  for (const extra of [{}, { enqueuedAt: null }, { enqueuedAt: time }]) {
+    const waiting = layout(normalize(data([job('a', null, extra)])), { referenceTime: Date.parse(time) });
+    assert.equal(waiting.nodes.length, 1);
+    assert.equal(waiting.edges.length, 0);
+  }
+  const assigned = layout(normalize(data([job('a', 0)])), { referenceTime: Date.parse(time) });
+  assert.equal(assigned.nodes.length, 1);
+  assert.equal(assigned.queues[0].unassignedCount, 0);
+  for (const enqueuedAt of ['', 'invalid', '2026-09-17T12:00:00', 1])
+    assert.throws(() => normalize(data([job('a', 0, { enqueuedAt })])), /timestamp/i);
+});
+
+test('enqueue groups retain assignment relations without changing dependency endpoints', () => {
+  const model = normalize(data([job('a', 0, { enqueuedAt: time }),
+    job('b', 1, { enqueuedAt: time, dependsOn: ['a', 'missing'] })]));
+  const view = layout(model, { referenceTime: Date.parse(time), expandedUnassigned: new Set(['q']) });
+  assert.equal(view.clusters.length, 1);
+  assert.equal(view.clusters[0].channel, null);
+  assert.equal(view.edges.filter(e => e.kind === 'assignment').length, 2);
+  const dependency = view.edges.find(e => e.kind === 'dependency');
+  assert.equal(dependency.fromMarker, view.nodes.find(n => n.id === 'a' && n.channel === 0).markerId);
+  assert.equal(dependency.toMarker, view.nodes.find(n => n.id === 'b' && n.channel === 1).markerId);
+  assert.equal(view.missingEdges, 1);
+  assert.ok(view.edges.every(e => !/NaN|Infinity/.test(e.path)));
+  const collapsed = layout(model, { referenceTime: Date.parse(time) });
+  assert.equal(collapsed.queues[0].unassignedCount, 2);
+  assert.equal(collapsed.edges.length, 1);
+  assert.equal(collapsed.edges[0].kind, 'dependency');
+});
+
+test('enqueue-to-start relations require both endpoints in the visible interval', () => {
+  const model = normalize(data([job('a', 0, { enqueuedAt: '2026-09-17T11:59:54.000Z' })]));
+  const view = layout(model, { referenceTime: Date.parse(time), expandedUnassigned: new Set(['q']) });
+  assert.equal(view.queues[0].unassignedCount, 1);
+  assert.equal(view.queues[0].unassignedVisibleCount, 0);
+  assert.equal(view.markers.length, 1);
+  assert.equal(view.edges.length, 0);
+});

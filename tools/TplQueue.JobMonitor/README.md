@@ -4,6 +4,12 @@ Reusable, dependency-free JavaScript Web Component for a passive queue execution
 timeline. The same source runs in the standalone demo and the .NET 8 Blazor sample.
 The default theme is dark; there is no permanent job details panel.
 
+For the adopted design and reasons behind the changes, read the
+[frontend maintenance instructions](<Instructions for TplQueue.Sample.BlazorSignalR.md>).
+For timestamp projection, Blazor lifecycle, asset synchronization and verification,
+use the [integration runbook](INTEGRATION.md). These describe the current implementation;
+the original sketch and dated fix report remain historical context.
+
 ## Run and verify
 
 With Node.js 20 or later, from this directory:
@@ -39,18 +45,24 @@ Give the element an explicit height. Snapshots replace data atomically. Invalid
 IDs, timestamps, queue references and channels are rejected before changing the
 view. IDs must be nonempty strings; timestamps must specify a timezone.
 `channel` is required and is either null or an integer in `0..maxParallelism-1`.
-Null jobs belong to a separate **Unassigned** strip outside the numbered execution
+Null jobs and retained enqueue markers belong to a separate **Unassigned** strip outside the numbered execution
 channels. Its label is always U, with the full Unassigned name in the hover tooltip
 and accessible name. It starts collapsed with a chevron and total count; click or press
 Enter/Space to expand it. Its tooltip also gives the count inside the visible time
 window. Search automatically expands the strip and navigates to the selected job.
 Nothing maps null to channel zero. Expansion survives snapshot updates; empty
-strips disappear. Expanded strips retain the timeline's real timestamp mapping.
+strips disappear only when no unassigned jobs or enqueue history remain.
+Expanded strips retain the timeline's real timestamp mapping.
 
 The optional `IJobExecutionEvent` interface supplies the sample's runtime channel.
 Existing `IJobEvent` implementations remain valid and project as unassigned.
 The Blazor mapper assigns a channel position only when its channel-bearing Started
-event is known, and uses that event's timestamp as `observedAt`. Enqueue time stays
+event is known, and uses that event's timestamp as `observedAt`. The optional nullable
+`enqueuedAt` field retains a historical marker in U after assignment. It requires
+an explicit timezone and is never inferred from arbitrary metadata. A dashed arrow
+connects that marker to its Started position when both endpoints are visible and U
+is expanded. Both positions select the same job; search and total job counts stay
+unique. Missing enqueue observations create no history. Enqueue time also stays
 in `metadata.enqueuedAt`; `metadata.timestampSource` names Started, Enqueued or
 FirstObserved. A Running/terminal event without the Started timestamp stays
 Unassigned until the missing event arrives. This avoids placing sequential
@@ -58,8 +70,9 @@ executions at a shared enqueue time. Other snapshot producers must likewise supp
 actual channel-acquisition time for assigned jobs; the JavaScript component cannot
 recover a Started event from an arbitrary observation timestamp.
 Terminal snapshots retain their captured channel after capacity is released.
-Root identity never controls channel placement. Only `dependsOn` creates edges;
-missing endpoints remain unresolved. State aliases `queued` and `canceled`
+Root identity never controls channel placement. `dependsOn` creates job-to-job edges;
+enqueue-to-start arrows connect positions of the same job. Missing dependency
+endpoints remain unresolved. State aliases `queued` and `canceled`
 normalize to `waiting` and `cancelled`; unsupported states display as `unknown`.
 
 The browser receives presentation values only. Metadata is bounded to 12 scalar
@@ -73,7 +86,7 @@ Text is rendered with textContent, never inserted as HTML.
 | `setReferenceTime(ISO or epoch milliseconds)` | Set the window end and enter historical mode |
 | `followLive()` | Return to five seconds and follow clock minus configured `liveLagMs` (default zero) |
 | `showOverview()` | Return to five seconds; restore the time and live/history mode saved before inspection |
-| `focusJob(id)` | Search the actual dependency graph in both directions; select and focus |
+| `focusJob(id, phase?)` | Focus the current position, or `enqueue`/`execution`; expand its history strip and select the same logical job |
 | `clearFocus()` | Remove selection and graph emphasis |
 | `selectedJobId`, `referenceTime`, `isFollowingLive`, `visibleWindowMs` | Read-only controller state |
 | `job-select` | Bubbling, composed event containing jobId and rootJobId |
@@ -147,8 +160,8 @@ outside the visible interval are not drawn. General edge crossings remain possib
 
 The demo includes three queue types, a 15-channel queue, a root with three
 dependencies, sequential starts and all requested states. Synthetic arrivals first
-appear Unassigned and move to a channel in a later snapshot with enqueue metadata
-preserved. The browser harness uses a separate dense-timing fixture for close and
+appear Unassigned and gain a channel position in a later snapshot, retaining the
+enqueue marker and its connector. The browser harness uses a separate dense-timing fixture for close and
 same-millisecond sequential events.
 Large graphs remain scrollable; general edge crossings are possible. Snapshots
 are intended to be bounded by the host; this is not a durable event history or an

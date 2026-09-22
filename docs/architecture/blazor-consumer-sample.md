@@ -48,7 +48,9 @@ Started event project with channel null. They appear in a collapsible Unassigned
 strip outside the queue's numbered channels. The strip starts collapsed, reports
 the total count, and can be expanded by mouse or keyboard. Its tooltip distinguishes
 the total from the count in the visible time window. Search reveals older waiting
-jobs and expands their strip automatically. Empty strips disappear.
+jobs and expands their strip automatically. Recorded enqueue markers remain in
+the strip after assignment; its count includes this history. Only strips without
+either unassigned jobs or retained enqueue markers disappear.
 A late pre-execution event cannot erase a known channel. The projection rejects
 out-of-range channels before mutating state and keeps detached snapshots.
 Queue MaxParallelism is read from the configured queue instances.
@@ -68,10 +70,15 @@ Started event. Running, retry and terminal observations do not substitute their
 timestamps for channel acquisition. A late Started event enriches the position
 without regressing lifecycle state. Until that event is known, the node stays
 Unassigned at EnqueuedAt (or FirstObservedAt when enqueue is unknown). On assignment
-the same job moves to its channel and real start time; its enqueue time remains
-in metadata. Duration still uses observer lifecycle timestamps and is labeled as
-such. Root identity never places jobs into channels. Only explicit dependencies
-create edges. No scheduler or observer contract change is required.
+the same job gains its channel/start position and retains its enqueue marker in U.
+The additive nullable `enqueuedAt` transport field supplies the recorded enqueue
+time, also retained in metadata. Layout draws a directed enqueue-to-start connector
+when both positions (or their groups) are visible. The two positions share one
+job identity, selection callback and job count; enqueue history is not another job.
+Missing enqueue observations produce no historical marker. Duration still uses observer lifecycle timestamps and is labeled as
+such. Root identity never places jobs into channels. Explicit dependencies create
+job-to-job edges; enqueue-to-start connectors describe positions of the same job.
+No scheduler or observer contract change is required.
 
 The monitor provides dark theme tokens, search by name/ID/description, connected
 graph focus, selection, bounded hover metadata, zoom, draggable/keyboard queue

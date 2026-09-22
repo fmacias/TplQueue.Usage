@@ -138,6 +138,9 @@ await check('pause and live controls preserve the five-second overview', async (
 await check('unassigned strip expands by keyboard without moving execution channels', async () => {
   viewer.clearFocus(); await frame();
   const getToggle=()=>viewer.shadowRoot.querySelector('[data-unassigned-id="cache"]');
+  if(getToggle().getAttribute('aria-expanded')==='true') {
+    getToggle().dispatchEvent(new MouseEvent('click',{bubbles:true})); await frame();
+  }
   const before=[...viewer.shadowRoot.querySelectorAll('.channel-line')].map(n=>n.getAttribute('x1'));
   getToggle().focus(); getToggle().dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await frame();
   assert(getToggle().getAttribute('aria-expanded')==='true','expanded');
@@ -154,20 +157,50 @@ await check('unassigned strip expands by keyboard without moving execution chann
   assert(getToggle().querySelector('.channel-label').textContent==='U','compact label when collapsed');
   assert(viewer.shadowRoot.activeElement===getToggle(),'keyboard focus retained');
 });
-await check('search reveals unassigned jobs and a Started update moves one job into its actual lane', async () => {
+await check('search reveals enqueue history and Started retains both positions with an assignment arrow', async () => {
   viewer.focusJob('waiting-batch'); await frame();
   assert(viewer.shadowRoot.querySelector('[data-unassigned-id="cache"]').getAttribute('aria-expanded')==='true','search auto-expands');
   const snapshot=sampleData(), job=snapshot.jobs.find(j=>j.id==='waiting-batch');
   const enqueueTime=job.observedAt;
+  job.enqueuedAt=enqueueTime;
   job.channel=0; job.observedAt='2026-09-17T11:59:59.800Z'; job.state='running';
   job.metadata={...job.metadata,enqueuedAt:enqueueTime,timestampSource:'Started'};
   viewer.setData(snapshot); await frame();
   const nodes=viewer.shadowRoot.querySelectorAll('[data-job-id="waiting-batch"]');
-  assert(nodes.length===1 && viewer.selectedJobId==='waiting-batch','one job, selection preserved');
-  assert(!viewer.shadowRoot.querySelector('[data-unassigned-id="cache"]'),'empty waiting strip removed');
-  assert(nodes[0].querySelector('title').textContent.includes('Channel: 0'),'actual channel');
+  assert(nodes.length===2 && viewer.selectedJobId==='waiting-batch','two positions, same job selection');
+  assert(viewer.shadowRoot.querySelector('[data-unassigned-id="cache"]'),'enqueue strip retained');
+  const assigned=[...nodes].find(n=>n.dataset.phase==='execution');
+  assert(assigned.querySelector('title').textContent.includes('Channel: 0'),'actual channel');
+  assert(viewer.shadowRoot.querySelector('.assignment[marker-end]'),'directed enqueue-to-start relation');
+  viewer.focusJob('waiting-batch'); await frame();
   assert(viewer.shadowRoot.querySelector('.exact-time').textContent==='11:59:59.800','Started coordinate');
-  assert(nodes[0].querySelector('title').textContent.includes(enqueueTime),'enqueue retained as metadata');
+  assert(assigned.querySelector('title').textContent.includes(enqueueTime),'enqueue retained as metadata');
+  let selections=0; const listener=e=>{assert(e.detail.jobId==='waiting-batch','original job ID');selections++;};
+  viewer.addEventListener('job-select',listener);
+  const enqueue=viewer.shadowRoot.querySelector('[data-job-id="waiting-batch"][data-phase="enqueue"]');
+  enqueue.focus(); enqueue.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await frame();
+  assert(selections===1 && viewer.selectedJobId==='waiting-batch','enqueue selects original job once');
+  assert(viewer.shadowRoot.querySelector('.exact-time').textContent==='11:59:59.000','enqueue coordinate');
+  assert(viewer.shadowRoot.activeElement?.dataset.phase==='enqueue','enqueue keyboard focus survives redraw');
+  viewer.setData(snapshot); await frame();
+  assert(viewer.shadowRoot.querySelectorAll('[data-job-id="waiting-batch"]').length===2,'refresh retains both positions');
+  viewer.removeEventListener('job-select',listener);
+});
+
+await check('grouped enqueue history is individually selectable at its own time', async () => {
+  const snapshot={queues:[{id:'history',name:'History',maxParallelism:2}],jobs:[0,1].map(i=>({
+    id:`history-${i}`,queueId:'history',channel:i,name:`History ${i}`,state:'completed',dependsOn:[],
+    observedAt:'2026-09-17T11:59:59.000Z',enqueuedAt:'2026-09-17T11:59:57.000Z'}))};
+  viewer.setData(snapshot); viewer.showOverview(); viewer.focusJob('history-0'); await frame();
+  const cluster=viewer.shadowRoot.querySelector('[data-cluster-id]');
+  assert(cluster,'enqueue group');
+  cluster.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})); await frame();
+  const entries=[...viewer.shadowRoot.querySelectorAll('.inspection-jobs button')];
+  assert(entries.length===2 && entries.every(n=>n.dataset.phase==='enqueue'),'enqueue inspection entries');
+  entries[0].click(); await frame();
+  assert(viewer.selectedJobId==='history-0','logical job ID');
+  assert(viewer.shadowRoot.querySelector('.exact-time').textContent==='11:59:57.000','inspect enqueue time, not execution');
+  assert(!viewer.shadowRoot.querySelector('.assignment'),'out-of-window endpoint is not fabricated');
 });
 document.querySelector('#summary').textContent=`${passed} passed; ${failed} failed`;
 document.documentElement.dataset.result = failed ? 'failed' : 'passed';

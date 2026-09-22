@@ -40,6 +40,23 @@ await check('navigation away and back disposes and reconnects one wrapper',async
   assert(selected===1,'one selection subscription');assert(errors.length===0,errors.join('; '));
   assert(getComputedStyle(frame.contentDocument.querySelector('#blazor-error-ui')).display==='none','no Blazor error banner');
 });
+await check('completed snapshots retain enqueue strips and enqueue-to-start relations',async()=>{
+  const v=viewer();
+  assert(v.shadowRoot.querySelectorAll('[data-unassigned-id]').length===3,'history strip for each runtime queue');
+  v.showOverview();
+  // Select real observer jobs, including clustered enqueue timestamps, through the circuit.
+  const input=v.shadowRoot.querySelector('input[type=search]');
+  input.value='measurements';input.dispatchEvent(new Event('input',{bubbles:true}));
+  const entries=[...v.shadowRoot.querySelectorAll('.results button')];
+  let connected=false;
+  for(const entry of entries) {
+    v.focusJob(entry.dataset.result); await wait(100);
+    if(v.shadowRoot.querySelector('.assignment[marker-end]')) { connected=true; break; }
+  }
+  assert(connected,'recorded enqueue and Started positions are connected');
+  assert(v.shadowRoot.querySelector('.mode').textContent.includes('18 jobs'),'history markers do not inflate job counts');
+  assert(errors.length===0,errors.join('; '));
+});
 document.querySelector('#summary').textContent=`${passed} passed; ${failed} failed`;
 document.documentElement.dataset.result=failed?'failed':'passed';
 if(location.search.includes('automation')) await fetch('http://127.0.0.1:4178/__acceptance/done?id=blazor', {mode:'no-cors'});

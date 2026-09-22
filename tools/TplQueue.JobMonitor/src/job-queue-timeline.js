@@ -1,5 +1,5 @@
 ﻿import { options } from './config.js';
-import { normalize, timestamp } from './model.js';
+import { normalize, timestamp, positions } from './model.js';
 import { layout } from './layout.js';
 import { search, connected } from './graph.js';
 import { render } from './renderer/svg-renderer.js';
@@ -9,6 +9,7 @@ export class JobQueueTimeline extends HTMLElement {
   #model = normalize({ queues: [], jobs: [] });
   #config = options(); #widths = {}; #reference = Date.now(); #live = true;
   #selected = null; #focused = null; #hovered = null;
+  #selectedPhase = null;
   #timer; #resize; #events; #frame; #view; #drag;
   #historyMin = 0; #historyMax = 1; #historyTarget = 0;
   #overview = null; #inspectionIds = null;
@@ -34,14 +35,14 @@ export class JobQueueTimeline extends HTMLElement {
     });
     listen(this.shadowRoot, 'keydown', e => this.#key(e));
     listen(this.shadowRoot, 'focusin', e => {
-      const job = this.#model.jobs.find(j => j.id === e.target.getAttribute?.('data-job-id'));
+      const job = this.#view?.nodes.find(j => j.markerId === e.target.getAttribute?.('data-marker-id'));
       if (job) {
-        this.shadowRoot.querySelector('.accessible-info').textContent = `${job.name}, ${job.state}, ${job.observedAt}, ${job.description}. ${job.metadataText}`;
-        this.#highlight(job.id);
+        this.shadowRoot.querySelector('.accessible-info').textContent = `${job.name}, ${job.phase}, ${job.state}, ${job.observedAt}, ${job.description}. ${job.metadataText}`;
+        this.#highlight(job.markerId);
       }
     });
     const svg = this.shadowRoot.querySelector('.timeline');
-    listen(svg, 'pointerover', e => this.#highlight(e.target.closest?.('[data-job-id]')?.getAttribute('data-job-id') ?? null));
+    listen(svg, 'pointerover', e => this.#highlight(e.target.closest?.('[data-marker-id]')?.getAttribute('data-marker-id') ?? null));
     listen(svg, 'pointerleave', () => this.#highlight(null));
     listen(this.shadowRoot.querySelector('.viewport'), 'wheel', e => {
       if (Math.abs(e.deltaX) > Math.abs(e.deltaY) || e.shiftKey || e.ctrlKey) return;
@@ -110,16 +111,18 @@ export class JobQueueTimeline extends HTMLElement {
     if (this.#live) this.#reference = Date.now() - this.#config.liveLagMs;
     this.#renderInspection(); this.#schedule();
   }
-  clearFocus() { this.#selected = null; this.#focused = null; this.#hovered = null; this.#schedule(); }
-  focusJob(id) {
-    const job = this.#model.jobs.find(j => j.id === id);
+  clearFocus() { this.#selected = null; this.#selectedPhase = null; this.#focused = null; this.#hovered = null; this.#schedule(); }
+  focusJob(id, phase) {
+    const points = positions(this.#model).filter(j => j.id === id);
+    const job = points.find(j => j.phase === phase) ?? points[0];
     if (!job) return false;
-    if (job.channel === null) this.#expandedUnassigned.add(job.queueId);
+    if (job.channel === null || job.enqueuedTime !== null) this.#expandedUnassigned.add(job.queueId);
+    this.#selectedPhase = job.phase;
     this.#selected = id; this.#hovered = null; this.#focused = connected(this.#model, id);
     this.setReferenceTime(job.time + this.visibleWindowMs / 2);
     this.#draw(); this.#renderInspection();
     const viewport = this.shadowRoot.querySelector('.viewport');
-    const node = this.#view.nodes.find(n => n.id === id);
+    const node = this.#view.nodes.find(n => n.markerId === job.markerId);
     viewport.scrollLeft = Math.max(0, node.x - (viewport.clientWidth + this.#view.gutter) / 2);
     this.dispatchEvent(new CustomEvent('job-select', { bubbles: true, composed: true, detail: { jobId: id, rootJobId: job.rootJobId } }));
     return true;
@@ -142,7 +145,7 @@ export class JobQueueTimeline extends HTMLElement {
     const cluster = this.#view?.clusters.find(n => n.id === id);
     if (!cluster) return;
     this.#rememberOverview();
-    this.#inspectionIds = cluster.members.map(n => n.id);
+    this.#inspectionIds = cluster.members.map(n => n.markerId);
     const span = cluster.endTime - cluster.startTime;
     const windowMs = Math.min(this.visibleWindowMs, Math.max(1, span * 1.6));
     this.configure({ scale: this.#config.windowMs / windowMs });
@@ -152,7 +155,7 @@ export class JobQueueTimeline extends HTMLElement {
   }
   #renderInspection() {
     const panel = this.shadowRoot.querySelector('.inspection');
-    const members = this.#inspectionIds && this.#model.jobs.filter(j => this.#inspectionIds.includes(j.id))
+    const members = this.#inspectionIds && positions(this.#model).filter(j => this.#inspectionIds.includes(j.markerId))
       .sort((a, b) => a.time - b.time || a.id.localeCompare(b.id));
     panel.hidden = !members?.length;
     if (panel.hidden) { this.#inspectionIds = null; return; }
@@ -160,14 +163,15 @@ export class JobQueueTimeline extends HTMLElement {
     this.shadowRoot.querySelector('.inspection-note').textContent =
       'Each entry retains its exact timestamp. Jobs at the same time share a count marker.';
     const list = this.shadowRoot.querySelector('.inspection-jobs');
-    const activeId = list.querySelector(':focus')?.dataset.result;
+    const activeId = list.querySelector(':focus')?.dataset.markerId;
     list.replaceChildren(...members.map(job => {
       const button = document.createElement('button'); button.type = 'button'; button.dataset.result = job.id;
+      button.dataset.phase = job.phase; button.dataset.markerId = job.markerId;
       button.setAttribute('aria-pressed', String(job.id === this.#selected));
-      button.textContent = `${new Date(job.time).toISOString().slice(11, 23)} UTC · ${job.name} · ${job.state}`;
+      button.textContent = `${new Date(job.time).toISOString().slice(11, 23)} UTC · ${job.name} · ${job.phase} · ${job.state}`;
       return button;
     }));
-    if (activeId) [...list.children].find(b => b.dataset.result === activeId)?.focus({ preventScroll: true });
+    if (activeId) [...list.children].find(b => b.dataset.markerId === activeId)?.focus({ preventScroll: true });
   }
   #search() {
     const results = this.shadowRoot.querySelector('.results');
@@ -183,7 +187,7 @@ export class JobQueueTimeline extends HTMLElement {
     if (target.hasAttribute('data-unassigned-id')) { this.#toggleUnassigned(target.getAttribute('data-unassigned-id')); return; }
     if (target.hasAttribute('data-cluster-id')) { this.#inspectCluster(target.getAttribute('data-cluster-id')); return; }
     const id = target.getAttribute('data-job-id') ?? target.getAttribute('data-result');
-    if (id) { this.focusJob(id); return; }
+    if (id) { this.focusJob(id, target.dataset.phase); return; }
     switch (target.dataset.action) {
       case 'clear': this.clearFocus(); break;
       case 'live': this.followLive(); break;
@@ -208,7 +212,7 @@ export class JobQueueTimeline extends HTMLElement {
     }
     if (['Enter', ' '].includes(e.key)) {
       if (e.target.hasAttribute?.('data-unassigned-id')) { this.#toggleUnassigned(e.target.getAttribute('data-unassigned-id')); e.preventDefault(); }
-      else if (e.target.hasAttribute?.('data-job-id')) { this.focusJob(e.target.getAttribute('data-job-id')); e.preventDefault(); }
+      else if (e.target.hasAttribute?.('data-job-id')) { this.focusJob(e.target.getAttribute('data-job-id'), e.target.dataset.phase); e.preventDefault(); }
       else if (e.target.hasAttribute?.('data-cluster-id')) { this.#inspectCluster(e.target.getAttribute('data-cluster-id')); e.preventDefault(); }
     }
     if (e.key === 'Escape' && (this.#overview || this.#inspectionIds)) {
@@ -228,8 +232,10 @@ export class JobQueueTimeline extends HTMLElement {
     const viewport = this.shadowRoot.querySelector('.viewport');
     this.#view = layout(this.#model, { ...this.#config, referenceTime: this.#reference,
       height: Math.max(240, viewport.clientHeight - 18), widths: this.#widths, expandedUnassigned: this.#expandedUnassigned });
+    const selected = this.#view.nodes.find(n => n.id === this.#selected && n.phase === this.#selectedPhase)
+      ?? this.#view.nodes.find(n => n.id === this.#selected);
     render(this.shadowRoot.querySelector('.timeline'), this.#view, this.#selected, this.#focused,
-      this.shadowRoot.querySelector('.time-ruler'), this.#hovered ?? this.#selected);
+      this.shadowRoot.querySelector('.time-ruler'), this.#hovered ?? selected?.markerId);
     this.shadowRoot.querySelector('.mode').textContent = `${this.#live ? 'LIVE' : 'HISTORY'} · ${this.#model.jobs.length} jobs${this.#view.missingEdges ? ` · ${this.#view.missingEdges} unresolved dependencies` : ''}`;
     const duration = this.visibleWindowMs;
     this.shadowRoot.querySelector('.scale-value').textContent = duration >= 1000 ? `${+(duration / 1000).toFixed(2)} s` : `${+duration.toFixed(2)} ms`;
@@ -239,7 +245,7 @@ export class JobQueueTimeline extends HTMLElement {
     this.shadowRoot.querySelector('[data-action=pause]').disabled = !this.#live;
     const input = this.shadowRoot.querySelector('.reference-input');
     if (this.shadowRoot.activeElement !== input) input.value = new Date(this.#reference).toISOString().slice(0,23);
-    const times = this.#model.jobs.map(j => j.time);
+    const times = this.#view.nodes.map(j => j.time);
     this.#historyMin = Math.min(this.#reference, ...times) - 60000;
     this.#historyMax = Math.max(this.#reference, ...times) + 60000;
     const history = this.shadowRoot.querySelector('.history');

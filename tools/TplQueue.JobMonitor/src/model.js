@@ -36,10 +36,22 @@ export function normalize(snapshot) {
     return Object.freeze({ id: jobId, queueId: queue.id, queueName: queue.name, channel: j.channel,
       rootJobId: j.rootJobId == null ? null : id(j.rootJobId), name: text(j.name || jobId),
       description: text(j.description, 512), observedAt: j.observedAt, time: timestamp(j.observedAt),
+      enqueuedAt: j.enqueuedAt ?? null, enqueuedTime: j.enqueuedAt == null ? null : timestamp(j.enqueuedAt),
       state: states.has(state) ? state : 'unknown', durationMs: Number.isFinite(j.durationMs) && j.durationMs >= 0 ? j.durationMs : null,
       dependsOn: Object.freeze([...new Set((j.dependsOn ?? []).map(id))].filter(d => d !== jobId)),
       metadataText: metadata(j.metadata), isRoot: j.isRoot === true });
   });
   if (snapshot.referenceTime != null) timestamp(snapshot.referenceTime);
   return Object.freeze({ queues: Object.freeze(queues), jobs: Object.freeze(jobs), referenceTime: snapshot.referenceTime });
+}
+
+/** Presentation positions share a job identity; enqueue history is not another job. */
+export function positions(model) {
+  return model.jobs.flatMap(job => {
+    const phase = job.channel === null ? 'enqueue' : 'execution';
+    const current = { ...job, phase, markerId: JSON.stringify([job.id, phase]) };
+    if (job.channel === null || job.enqueuedTime === null) return [current];
+    return [current, { ...job, phase: 'enqueue', markerId: JSON.stringify([job.id, 'enqueue']),
+      channel: null, observedAt: job.enqueuedAt, time: job.enqueuedTime, state: 'waiting', durationMs: null }];
+  });
 }

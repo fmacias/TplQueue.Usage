@@ -39,7 +39,7 @@ These samples are the canonical runnable examples cited by the product-repositor
 
 The Blazor sample uses the reusable `job-queue-timeline` Web Component with real runtime execution channels, vertical time, and a full-area viewer without a permanent details panel. See the maintained architecture guide for contracts and validation.
 The component's five-second overview uses exact square position markers, a left UTC ruler and compact channels. Dense jobs use count markers with temporary closer inspection in the same viewer.
-Assigned positions use backend Started timestamps; waiting jobs use a collapsible Unassigned strip, with enqueue time preserved as metadata after assignment.
+Assigned positions use backend Started timestamps. The collapsible Unassigned strip retains recorded enqueue markers after assignment, with directed connectors to Started positions when both are visible. Both markers select the same job.
 
 ## Public package consumption
 

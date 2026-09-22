@@ -559,6 +559,50 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             Assert.That(json, Does.Not.Contain("exception"));
         }
 
+        [TestCase(false)]
+        [TestCase(true)]
+        public void Monitor_RetainsTypedEnqueueHistory_AfterCompletionAndLateDelivery(bool enqueueArrivesLate)
+        {
+            // Arrange
+            var store = CreateStore();
+            var info = Job(Guid.NewGuid(), "enqueue history", ParallelQueueId);
+            var time = Utc(10, 15, 0);
+            if (!enqueueArrivesLate) store.Apply(Event(JobEventStatus.Enqueued, info, time));
+
+            // Act
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, time.AddSeconds(1), 1));
+            store.Apply(new ChannelEvent(JobEventStatus.Successed, info, time.AddSeconds(2), 1));
+            if (enqueueArrivesLate) store.Apply(Event(JobEventStatus.Enqueued, info, time));
+            var dto = JobMonitorMapper.Map(store.GetSnapshot());
+            var json = System.Text.Json.JsonSerializer.Serialize(dto,
+                new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+
+            // Assert: a fresh browser receives both times, but still only one logical job.
+            var job = dto.Jobs.Single();
+            Assert.That(job.EnqueuedAt, Is.EqualTo(time));
+            Assert.That(job.ObservedAt, Is.EqualTo(time.AddSeconds(1)));
+            Assert.That(job.Channel, Is.EqualTo(1));
+            Assert.That(job.State, Is.EqualTo("completed"));
+            Assert.That(document.RootElement.GetProperty("jobs")[0].GetProperty("enqueuedAt").GetDateTimeOffset(), Is.EqualTo(time));
+        }
+
+        [Test]
+        public void Monitor_DoesNotInventEnqueueHistory_WhenOnlyStartedWasObserved()
+        {
+            // Arrange
+            var store = CreateStore();
+            var info = Job(Guid.NewGuid(), "start only", ParallelQueueId);
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, Utc(10, 15, 0), 0));
+
+            // Act
+            var job = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single();
+
+            // Assert
+            Assert.That(job.EnqueuedAt, Is.Null);
+            Assert.That(job.Channel, Is.EqualTo(0));
+        }
+
         private sealed class ChannelEvent : FakeJobEvent, IJobExecutionEvent
         {
             public ChannelEvent(JobEventStatus status, IJobInfo info, DateTimeOffset time, int channel)

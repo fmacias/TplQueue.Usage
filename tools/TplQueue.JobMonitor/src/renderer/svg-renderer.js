@@ -9,10 +9,15 @@ const title = (node, text) => node.append(element('title', {}, text));
 const symbols = { waiting: 'W', running: '▶', completed: '✓', retried: '↻', failed: '×', cancelled: '−', unknown: '?' };
 
 /** Mechanical SVG adapter. Grouping, geometry and time mapping belong to layout. */
-export function render(svg, view, selectedId, focusedIds, ruler, highlightedId = selectedId) {
+export function render(svg, view, selectedId, focusedIds, ruler, highlightedMarkerId) {
   svg.setAttribute('width', view.width);
   svg.setAttribute('height', view.height);
   const fragment = document.createDocumentFragment();
+  const defs = element('defs');
+  const arrow = element('marker', { id: 'assignment-arrow', viewBox: '0 0 8 8', refX: 8, refY: 4,
+    markerWidth: 6, markerHeight: 6, orient: 'auto', markerUnits: 'userSpaceOnUse' });
+  arrow.append(element('path', { d: 'M 0 0 L 8 4 L 0 8 Z', class: 'assignment-arrow' }));
+  defs.append(arrow); fragment.append(defs);
   for (const q of view.queues) {
     fragment.append(element('rect', { x: q.x, y: view.headerHeight, width: q.width,
       height: view.height - view.headerHeight, class: 'queue-body' }));
@@ -26,10 +31,17 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedId =
   for (const tick of view.ticks) fragment.append(element('line', {
     x1: view.gutter, x2: view.width, y1: tick.y, y2: tick.y, class: 'time-grid' }));
   fragment.append(element('line', { x1: view.gutter, x2: view.width, y1: view.referenceY, y2: view.referenceY, class: 'reference-line' }));
-  for (const edge of view.edges) fragment.append(element('path', { d: edge.path,
-    class: `dependency ${focusedIds && (!focusedIds.has(edge.from) || !focusedIds.has(edge.to)) ? 'dim' : ''}` }));
+  for (const edge of view.edges) {
+    const path = element('path', { d: edge.path,
+      class: `${edge.kind} ${focusedIds && (!focusedIds.has(edge.from) || !focusedIds.has(edge.to)) ? 'dim' : ''}` });
+    if (edge.kind === 'assignment') {
+      path.setAttribute('marker-end', 'url(#assignment-arrow)');
+      title(path, 'Enqueue → Started');
+    }
+    fragment.append(path);
+  }
 
-  const highlight = view.nodes.find(n => n.id === highlightedId && !n.hidden && n.time >= view.startTime && n.time <= view.referenceTime);
+  const highlight = view.nodes.find(n => n.markerId === highlightedMarkerId && !n.hidden && n.time >= view.startTime && n.time <= view.referenceTime);
   if (highlight) {
     fragment.append(element('line', { x1: view.gutter, x2: view.width, y1: highlight.y, y2: highlight.y, class: 'alignment-guide' }));
     fragment.append(element('line', { x1: highlight.x, x2: highlight.x, y1: view.plotTop, y2: view.referenceY, class: 'alignment-guide' }));
@@ -52,8 +64,8 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedId =
       fragment.append(node);
       continue;
     }
-    const node = element('g', { 'data-job-id': n.id, tabindex: '0', role: 'button',
-      'aria-label': `${n.name}, ${n.state}, ${n.queueName}, ${n.channel === null ? 'unassigned' : `channel ${n.channel}`}, ${n.observedAt}`,
+    const node = element('g', { 'data-job-id': n.id, 'data-marker-id': n.markerId, 'data-phase': n.phase, tabindex: '0', role: 'button',
+      'aria-label': `${n.name}, ${n.phase}, ${n.state}, ${n.queueName}, ${n.channel === null ? 'unassigned' : `channel ${n.channel}`}, ${n.observedAt}`,
       'aria-pressed': String(n.id === selectedId),
       class: `job ${n.state} ${n.id === selectedId ? 'selected' : ''} ${focusedIds && !focusedIds.has(n.id) ? 'dim' : ''}` });
     node.append(element('rect', { x: n.x - n.targetSize / 2, y: n.y - n.targetSize / 2,
@@ -62,7 +74,7 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedId =
       width: n.size, height: n.size, class: 'position-marker' }));
     node.append(element('text', { x: n.x + 7, y: n.y - 5, 'text-anchor': 'middle',
       class: 'state-symbol', 'aria-hidden': 'true' }, symbols[n.state] ?? '?'));
-    title(node, `${n.name}\nID: ${n.id}\nQueue: ${n.queueName}\nChannel: ${n.channel ?? 'unassigned'}\nState: ${n.state}\nObserved: ${n.observedAt}\nDuration: ${n.durationMs === null ? 'unknown' : `${n.durationMs} ms`}\n${n.description}\n${n.metadataText}`);
+    title(node, `${n.name}\nID: ${n.id}\nQueue: ${n.queueName}\nChannel: ${n.channel ?? 'unassigned'}\nPosition: ${n.channel === null && n.enqueuedAt === null ? 'unassigned observation' : n.phase}\nState: ${n.state}\nObserved: ${n.observedAt}\nDuration: ${n.durationMs === null ? 'unknown' : `${n.durationMs} ms`}\n${n.description}\nJob snapshot metadata:\n${n.metadataText}`);
     fragment.append(node);
   }
   for (const q of view.queues) {
@@ -82,7 +94,7 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedId =
         class: 'channel-label' }, 'U'));
       toggle.append(element('text', { x: q.unassignedX, y: 44, 'text-anchor': 'middle',
         class: 'channel-label' }, `${q.unassignedExpanded ? '‹' : '›'} ${q.unassignedCount}`));
-      title(toggle, `Unassigned: ${q.unassignedCount} total; ${q.unassignedVisibleCount} in this time window. Click or press Enter to ${q.unassignedExpanded ? 'collapse' : 'expand'}. Search finds older waiting jobs.`);
+      title(toggle, `Unassigned: ${q.unassignedCount} total; ${q.unassignedVisibleCount} in this time window. Includes retained enqueue history. Click or press Enter to ${q.unassignedExpanded ? 'collapse' : 'expand'}. Search reveals the selected job's strip.`);
       fragment.append(toggle);
     }
     const separator = element('rect', { x: q.x + q.width - 4, y: 0, width: 8, height: view.height,
@@ -92,7 +104,7 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedId =
     fragment.append(separator);
   }
   const active = svg.querySelector(':focus');
-  const focusAttribute = ['data-job-id', 'data-cluster-id', 'data-queue-id', 'data-unassigned-id'].find(a => active?.hasAttribute(a));
+  const focusAttribute = ['data-marker-id', 'data-cluster-id', 'data-queue-id', 'data-unassigned-id'].find(a => active?.hasAttribute(a));
   const focusValue = focusAttribute && active.getAttribute(focusAttribute);
   svg.replaceChildren(fragment);
   if (focusAttribute) [...svg.querySelectorAll('[tabindex]')].find(n =>

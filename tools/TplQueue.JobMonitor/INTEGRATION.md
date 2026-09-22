@@ -1,135 +1,170 @@
 # Integration into `TplQueue.Sample.BlazorSignalR`
 
-The September 20, 2026 approved viewer changes supersede earlier geometry guidance:
-five-second overview ending at the bottom reference, exact square centers, count
-markers instead of displacement, and temporary interval inspection. See the
-[component README](README.md) for current configuration and interaction behavior.
-The host continues to synchronize the shared assets; do not edit generated copies.
-Assigned `observedAt` values now come from channel-bearing Started events. Keep
-enqueue time in metadata and jobs without that start/channel pair in the collapsible
-Unassigned strip. See the maintained guide for late-event and expansion behavior.
+This is the integration and maintenance runbook for Usage commits `ac680c2` and
+`931d6f0`, updated September 21, 2026. Integration is implemented. Preserve these
+decisions rather than repeating the original exploratory choice of channels,
+frontend framework or asset-copy mechanism.
 
-## 1. Goal
+The [sample architecture guide](../../docs/architecture/blazor-consumer-sample.md)
+owns overall architecture and repository boundaries. The [adopted frontend instructions](<Instructions for TplQueue.Sample.BlazorSignalR.md>)
+record geometry, UX decisions and reasons; [README.md](README.md) is the component
+API reference. Read applicable repository/workspace instructions before editing.
+Verify source names if a later revision changes them.
 
-Integrate the standalone `TplQueue.JobMonitor` Web Component into the existing `.NET 8` Blazor sample while preserving TplQueue runtime boundaries.
+## 1. Current host and source map
 
-The frontend is diagnostic/presentation code.
+The host is a passive .NET 8 Blazor Web App using Interactive Server rendering.
+The hosted ETL workload runs independently of browsers. The Blazor circuit carries
+presentation updates; there is no application REST API, OpenAPI contract or custom
+dashboard SignalR hub. `QueueObserverSignalRDashboard` is a separate sample with
+its own transport and must not be confused with this host.
 
-It must not become coupled directly to TplQueue runtime objects.
+Paths below are relative to Usage:
 
----
+| Path | Responsibility |
+| --- | --- |
+| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/EtlQueueCatalog.cs` | Queue identity/capacity from configured queue instances. |
+| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/EtlExecutionProjectionStore.cs` | Thread-safe materialization, deduplication and late-event handling. |
+| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/EtlDashboardSnapshot.cs` | Detached C# snapshot, including channel and ChannelStartedAt. |
+| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/JobMonitorSnapshot.cs` | Browser DTOs and semantic mapper. |
+| `samples/TplQueue.Sample.BlazorSignalR/Components/Pages/Dashboard.razor` | Projection subscription, InvokeAsync dispatch and snapshot mapping. |
+| `samples/TplQueue.Sample.BlazorSignalR/Components/JobMonitor.razor` | Serialized JS initialization, updates and disposal. |
+| `tools/TplQueue.JobMonitor/integrations/blazor/job-monitor.js` | Idempotent selection subscription and snapshot bridge. |
+| `samples/TplQueue.Sample.BlazorSignalR/TplQueue.Sample.BlazorSignalR.csproj` | Shared asset synchronization for build/publish. |
+| `test/integration/Fmacias.TplQueue.Usage.Integration.Test/Samples/EtlExecutionProjectionStoreTests.cs` | Projection, mapper and contract regressions. |
 
-## 2. Verify the current repository first
-
-Known historical assumptions include:
-
-- `TplQueue.Sample.BlazorSignalR`
-- `.Etl` and `.Etl.Contracts`
-- `IFifoQ`, `IParallelQ`, `ICacheQ`
-- `IJobEvent`, `IDataJobEvent`
-- server-side observer/state updates
-- Interactive Server rendering
-- an earlier ScatterChart/ChartJS frontend
-
-These are **not guaranteed to still be current**.
-
-Before editing:
-
-1. locate the actual Blazor host,
-2. locate dashboard/state/projection services,
-3. locate observer registration,
-4. locate queue creation/configuration and `MaxParallelism`,
-5. locate the current frontend integration,
-6. inspect TplQueue Core for the actual execution-capacity acquisition/release path,
-7. report material differences from this document.
-
----
-
-## 3. Recommended component placement
-
-Reusable source:
+The actual direction is:
 
 ```text
-tools/TplQueue.JobMonitor/
+immutable runtime lifecycle events
+  -> EtlQueueObserver
+  -> thread-safe EtlExecutionProjectionStore
+  -> detached EtlDashboardSnapshot
+  -> JobMonitorMapper -> JobMonitorSnapshot
+  -> Dashboard / JobMonitor Razor wrapper
+  -> JS bridge -> job-queue-timeline.setData(snapshot)
 ```
 
-Blazor static assets:
+Do not send live jobs, IJobEvent, payload graphs, queue instances, schedulers,
+exceptions or synchronization objects across JS interop. C# owns runtime behavior;
+the browser owns view state. DTOs are handwritten and require semantic review;
+they are not generated from an authoritative API schema.
+
+## 2. Channel observation: the chosen contract
+
+The additive public `IJobExecutionEvent : IJobEvent` interface in Abstractions
+exposes `int? ExecutionChannel`. Existing IJobEvent implementations need not
+implement it. The compatible Abstractions contract was committed as `2c4e4f0`.
+
+A non-null channel is queue-local execution capacity in `0..MaxParallelism-1`.
+The runtime captures it while capacity is held and retains it in terminal events
+before release. It stays stable across retries in that execution. FifoQ uses 0.
+Independent queues may each own channel 0; concurrent executions within one queue
+cannot share it. Capacity can include dependency waiting and retry delays, so it
+is neither a thread identifier nor a CPU occupancy measurement.
+
+Private allocation details belong in Core documentation. Do not add another
+allocator or change execution semantics for this integration. The initial viewer
+required additive runtime observation support; the later Started/Unassigned
+correction changed Usage projection and UI only, with no additional scheduler
+or public observer contract change.
+
+## 3. Projection rules: pair the channel with its start time
+
+Separate first observation from channel acquisition. Mapping an eventual channel
+onto enqueue time made sequential jobs appear simultaneous in one lane.
+
+| Value | Meaning |
+| --- | --- |
+| `FirstObservedAt` | Earliest observation known to the projection. |
+| `EnqueuedAt` | Earliest Cache/Enqueueing/Enqueued observation, if known. |
+| `StartedAt` | Existing duration baseline, enriched from Dequeued/Started/Running observations. |
+| `ExecutionChannel` | Captured channel metadata, if known. |
+| `ChannelObservedAt` | Internal ordering timestamp for channel metadata. |
+| `ChannelStartedAt` | Earliest matching channel-bearing Started time; the assigned position. |
+| `EndedAt` | Latest known terminal observation. |
+
+`StartedAt` and `ChannelStartedAt` intentionally differ. Do not use the broader
+lifecycle baseline as channel-acquisition time.
+
+Preserve the sequence in `Apply`:
+
+1. Validate channel range against the queue before mutating state.
+2. Deduplicate event fingerprints, including channel metadata, under the store lock.
+3. Accept non-null channel metadata at least as recent as the stored channel
+   observation. Late null-channel events cannot erase captured identity.
+4. If the accepted channel changes, clear the old ChannelStartedAt.
+5. A channel-bearing Started event matching the stored channel enriches
+   ChannelStartedAt, even when delivered after Running or terminal events.
+6. Preserve lifecycle precedence: delayed Started corrects placement without
+   regressing terminal state to running. Same-rank events use timestamps; retry
+   count retains the maximum observed value.
+7. Return detached snapshots and notify outside the lock, isolating subscriber
+   failures. No observer notification invokes JavaScript directly.
+
+Mapper rule:
 
 ```text
-TplQueue.Sample.BlazorSignalR/wwwroot/job-monitor/
+assigned = ExecutionChannel exists AND ChannelStartedAt exists
+
+assigned:
+    channel = ExecutionChannel
+    observedAt = ChannelStartedAt
+    metadata.timestampSource = Started
+otherwise:
+    channel = null
+    observedAt = EnqueuedAt ?? FirstObservedAt
+    metadata.timestampSource = Enqueued or FirstObserved
+
+if EnqueuedAt exists:
+    enqueuedAt = round-trip timestamp
+    metadata.enqueuedAt = round-trip timestamp
 ```
 
-If the current repository already uses a Razor Class Library for reusable UI, preserve that convention and use:
+For example, two jobs enqueued at 12:00:00 but started in channel 0 at 12:00:01
+and 12:00:02 appear at distinct start times. Before each matching Started event
+is known, that job stays in U. A terminal event arriving first can leave a completed
+job in U temporarily: its state is known, but its placement is not.
 
-```text
-_content/{AssemblyName}/...
-```
+Update the same job ID on assignment. The optional nullable `enqueuedAt` field
+retains the observed enqueue marker in U, including for browsers connecting after
+completion. Layout adds a dashed directed connector to the channel/start position
+when both endpoints are visible and U is expanded. One logical job has two position
+identities for keyboard focus, hover and grouped inspection; callbacks, graph
+traversal and job counts retain the original job ID. Unknown enqueue time produces
+no historical point. Terminal snapshots retain both known positions. JavaScript cannot
+infer a Started timestamp from an arbitrary observedAt; other producers must
+supply the same semantics.
 
-Do not create a second competing asset convention.
+## 4. Presentation DTO contract
 
----
-
-## 4. Blazor → JavaScript boundary
-
-Use a small Razor wrapper around:
-
-```razor
-<job-queue-timeline @ref="_element"></job-queue-timeline>
-```
-
-The wrapper should:
-
-- import the ES module once,
-- initialize the custom element once,
-- call `setData(snapshot)` when the presentation snapshot changes,
-- subscribe to `job-select`,
-- return selected job identity to Blazor through `EventCallback`,
-- dispose JavaScript listeners,
-- dispose `DotNetObjectReference` if used,
-- dispose the module/reference correctly,
-- tolerate navigation away/back.
-
-Use:
-
-- `ElementReference`,
-- `IJSRuntime`,
-- imported ES module,
-- `IAsyncDisposable` where appropriate.
-
-Do not call JavaScript directly from an observer/background thread.
-
----
-
-# 5. Presentation DTO contract
-
-JSON passed to JavaScript must be presentation-only and camel-cased.
-
-Recommended snapshot:
+The C# JobMonitorSnapshot has Queues and Jobs, serialized to camelCase by Blazor
+interop. A representative assigned job is:
 
 ```json
 {
-  "referenceTime": "2026-09-17T15:20:00.000Z",
   "queues": [
-    {
-      "id": "parallel",
-      "name": "ParallelQ",
-      "maxParallelism": 3
-    }
+    { "id": "parallel", "name": "ParallelQ", "maxParallelism": 3 }
   ],
   "jobs": [
     {
       "id": "job-42",
-      "rootJobId": "root-7",
+      "rootJobId": null,
       "name": "Normalize measurements",
-      "description": "Normalizes units and filters invalid samples.",
+      "description": "",
       "queueId": "parallel",
       "channel": 0,
-      "observedAt": "2026-09-17T15:19:58.500Z",
+      "observedAt": "2026-09-20T12:00:01.000Z",
+      "enqueuedAt": "2026-09-20T12:00:00.000Z",
       "state": "completed",
-      "durationMs": 2380,
-      "dependsOn": ["job-41"],
+      "durationMs": 380,
+      "dependsOn": [],
       "metadata": {
-        "handler": "sample.etl.normalize.v2"
+        "event": "Successed",
+        "retryCount": "0",
+        "durationSource": "observer lifecycle timestamps",
+        "timestampSource": "Started",
+        "enqueuedAt": "2026-09-20T12:00:00.0000000+00:00"
       },
       "isRoot": false
     }
@@ -137,325 +172,192 @@ Recommended snapshot:
 }
 ```
 
-A waiting/pre-execution job may use:
+The example uses readable IDs; the sample emits Guid strings and its Razor callback
+accepts Guids. Description is empty because the observer contract supplies none.
+Duration is nonnegative EndedAt minus lifecycle StartedAt if both exist, otherwise
+null. It is not measured handler CPU duration. Error summaries stay available to
+C# consumers; raw errors/payloads do not enter this DTO.
 
-```json
-"channel": null
+JS also accepts optional top-level `referenceTime`, an ISO timestamp with timezone.
+Supplying it to setData calls setReferenceTime and enters history mode. The C# DTO
+intentionally omits it, so observer updates do not reset each browser's live/history
+choice. The deterministic demo supplies it; synthetic live arrivals remove it.
+
+Validation requires queues/jobs arrays, unique nonempty string IDs, known queues,
+and integer maxParallelism in 1..1024. Every job explicitly supplies channel null
+or an integer within the queue's range; omitted channel is invalid. Timestamps
+require an explicit timezone. Invalid input leaves the previous model intact.
+Dependencies must be an array when supplied; duplicates/self references are removed,
+while unknown endpoint IDs remain unresolved.
+
+The mapper converts queued to waiting, canceled to cancelled, and running with
+positive retry count to retried. JS also handles queued/canceled aliases and
+shows unsupported states as unknown. Metadata is bounded to 12 entries, keys to
+48 characters and values to 160; structured values become a summary. Render
+presentation values through safe DOM textContent.
+
+## 5. Viewer behavior the host must preserve
+
+The frontend instructions give detailed geometry. Integration must retain:
+
+- A five-second overview ending at the bottom reference, fixed left UTC ruler,
+  exact square centers and time-only zoom down to a one-millisecond interval.
+- Numbered execution channels and a separate collapsible U strip for null channels.
+  U stays visible in both states; Unassigned appears in hover/accessibility text.
+  Default extra width is 36 pixels collapsed and 40 expanded.
+- Search revealing the selected job's Unassigned strip, including retained enqueue
+  history. Its channel/start position and enqueue position share the same job ID.
+  Draw a directed enqueue-to-start relation when both endpoints are visible.
+- Count markers for resolution collisions, temporary interval inspection and a
+  list for selecting equal-time jobs. No timestamp displacement.
+- Straight dependency segments and root identity independent of channel placement.
+- Per-browser selection/view state, keyboard access, horizontal overflow, and no
+  permanent details panel.
+
+Unassigned is a presentation classification, not a runtime channel or lifecycle
+state. Legacy/completed jobs missing Started data can remain there. Correct start
+times reduce grouping but cannot give every execution a separate point at every zoom.
+
+## 6. Razor and JS lifecycle
+
+Dashboard subscribes to ProjectionStore.Changed, builds its initial snapshot,
+and uses InvokeAsync for refreshes. An interlocked pending flag coalesces updates.
+Disposal marks the page disposed and unsubscribes. The singleton store owns runtime
+facts; each circuit owns selection and presentation state.
+
+JobMonitor.razor renders an ElementReference-backed custom element. OnAfterRenderAsync
+imports `./job-monitor/integrations/blazor/job-monitor.js`, creates one
+DotNetObjectReference and attaches it. A SemaphoreSlim gate serializes initialization,
+snapshot updates and disposal. Revision counters send the latest pending snapshot
+without competing update loops.
+
+The bridge's WeakMap stores one active connection per element. Attach first detaches
+a prior listener; update forwards only for attached elements; detach marks the
+connection inactive and removes its listener. Job-select calls Razor SelectJob,
+then EventCallback<Guid>. The page stores the selection without a details panel.
+
+Async disposal marks the wrapper disposed, waits for the gate, detaches JS, and
+disposes the module/callback while tolerating circuit disconnection. Keep the gate
+alive for render work already queued on the circuit. Do not invoke JS from observer
+threads or add runtime subscriptions to the Web Component. The component separately
+cleans up DOM listeners, ResizeObserver and timers on disconnection. Navigation
+away/back must not duplicate subscriptions.
+
+## 7. Asset synchronization and host sizing
+
+The maintained source is tools/TplQueue.JobMonitor. The host project implements
+`SynchronizeJobMonitorAssets` before `ResolveProjectStaticWebAssets;AssignTargetPaths`.
+It copies src/**, integrations/blazor/** and LICENSE into the ignored directory
+`samples/TplQueue.Sample.BlazorSignalR/wwwroot/job-monitor/`, removes stale generated
+files, and includes assets in build/publish output.
+
+Debug additionally copies tests/blazor.html and tests/blazor.js with
+CopyToPublishDirectory=Never. There is no manually maintained second asset copy,
+Razor Class Library convention, npm build or CDN dependency. Edit shared source,
+then rebuild the host to refresh generated files.
+
+The host supplies outer layout and an explicit custom-element height. Internal
+theme values remain component CSS variables. Host and viewport ResizeObservers
+handle changes after the external shadow stylesheet loads.
+
+ChartJS/ScatterChart, vis-timeline, Bootstrap assets and the old details panel are
+retired from the host. The old C# mapper remains only in integration-test
+Legacy/ScatterTimeline.cs to preserve tests, not as an alternate production contract.
+
+## 8. Build and verification procedure
+
+Choose the correct dependency mode first. During coordinated preview development,
+the sample/ETL path intentionally references sibling source. Building through
+WorkspaceTplQueue applies the matching source-reference switch. An older default
+Abstractions package lacks IJobExecutionEvent; do not remove the channel contract
+to work around a dependency mismatch.
+
+From the sibling WorkspaceTplQueue directory:
+
+```powershell
+.\build.ps1 -Configuration Debug
+dotnet run --no-build --configuration Debug --project ..\TplQueue.Usage\samples\TplQueue.Sample.BlazorSignalR
 ```
 
-only when no real execution slot has been acquired yet.
+Open the address printed by ASP.NET Core. The workspace and Usage root build scripts
+are distinct entry points. Usage build/test/coverage scripts serve its documented
+package-consumption workflow; package versions must be coordinated. When local
+packing is needed, use the documented sibling TplQueue.NugetLocal feed.
 
-Do not replace `null` with a hash/family-derived lane.
+To reproduce the focused source validation used here, from Usage after restoring
+the matching workspace:
 
----
-
-# 6. Execution-channel contract
-
-## 6.1 Definition
-
-`channel` means:
-
-> the logical execution slot owned by the job inside its queue while it holds queue execution capacity.
-
-It is **not**:
-
-- thread ID,
-- Task ID,
-- root/family index,
-- arbitrary presentation lane,
-- modulo/hash of job ID.
-
-For a queue with `MaxParallelism = N`:
-
-```text
-channel ∈ [0, N-1]
+```powershell
+$workspaceRoot = ((Resolve-Path ..\WorkspaceTplQueue).Path -replace '\\', '/') + '/'
+$sourceArgs = @('-p:SolutionFileName=WorkspaceTplQueue.sln', "-p:SolutionDir=$workspaceRoot", '-p:SkipPackLocal=true')
+dotnet build samples/TplQueue.Sample.BlazorSignalR/TplQueue.Sample.BlazorSignalR.csproj -c Debug --no-restore @sourceArgs
+dotnet test test/integration/Fmacias.TplQueue.Usage.Integration.Test/Fmacias.TplQueue.Usage.Integration.Test.csproj -c Debug --no-restore @sourceArgs
 ```
 
-## 6.2 Current known issue
+No-restore assumes matching restore outputs exist. These commands validate source
+composition, not package-only consumption or a coverage gate. For runtime changes,
+run the applicable repository build, unit, local pack and integration steps;
+record omitted steps and dependency mode explicitly.
 
-`IJobEvent` does not necessarily expose this information.
+From tools/TplQueue.JobMonitor:
 
-Therefore the integration must not assume that observer events alone are sufficient.
-
-## 6.3 Repository investigation
-
-Find the Core code path where a job actually obtains/relinquishes execution capacity.
-
-Typical concepts to inspect, using the repository's real names:
-
-- semaphore/permit acquisition,
-- dequeue + dispatch,
-- worker/execution lease,
-- start execution,
-- terminal completion/failure/cancellation,
-- observer emission.
-
-## 6.4 Preferred implementation if Core has no channel identity
-
-Add a minimal logical channel allocator adjacent to the existing execution-capacity mechanism.
-
-Conceptually:
-
-```text
-queue has MaxParallelism = N
-channel pool = 0..N-1
-
-after execution capacity is acquired:
-    acquire one channel id
-    associate it with job id / execution
-    emit or make it available to observer/projection
-
-on every terminal path:
-    release channel id
+```powershell
+node scripts/check.mjs
+node --test tests/layout.test.js
+node demo/server.mjs
 ```
 
-The channel allocator is observability instrumentation, not a new scheduler.
-
-Do not change queue ordering, backpressure, retry, cancellation, or dependency behavior.
-
-### Required safety rules
-
-- no duplicate channel ownership among concurrent jobs of one queue,
-- always release in `finally` or equivalent guaranteed cleanup,
-- never exceed `MaxParallelism`,
-- never change channel during one execution,
-- FifoQ uses `0`,
-- queue instances must not leak channel state into each other.
-
-## 6.5 How to expose it
-
-Prefer the smallest backward-compatible path supported by the current architecture:
-
-1. existing observer metadata/DTO field if already available,
-2. additive observer contract field if compatible,
-3. internal execution correlation store consumed by the sample projection,
-4. another minimal additive mechanism justified by repository structure.
-
-Do not break public interfaces merely to satisfy the sample if a smaller compatible solution exists.
-
-Document the chosen path.
-
----
-
-# 7. Observer integration
-
-Required direction:
-
-```text
-observer callback
-    ↓
-map runtime facts to dashboard DTO
-    ↓
-update thread-safe projection
-    ↓
-notify presentation state
-    ↓
-Razor InvokeAsync(...)
-    ↓
-JS setData(snapshot)
-```
-
-Rules:
-
-- no JS interop from observer threads,
-- no Razor component owns runtime synchronization,
-- no runtime object is serialized to the browser,
-- projection must be safe under observer timing,
-- do not assume asynchronous observer callback order unless the current Core contract guarantees it.
-
-Prefer full snapshots for this integration.
-
-Only add incremental `appendJob` after a stable ordered event contract exists and is tested.
-
----
-
-# 8. Projection responsibilities
-
-The presentation projection should own/derive:
-
-### Queue data
-
-- queue ID,
-- queue display name,
-- `MaxParallelism`.
-
-### Job data
-
-- job ID,
-- root job ID if available,
-- name,
-- description,
-- queue ID,
-- real logical channel when known,
-- observed timestamp,
-- normalized state,
-- duration,
-- dependency IDs,
-- bounded presentation metadata,
-- root flag.
-
-The projection may normalize data.
-
-It must not invent execution facts.
-
----
-
-# 9. State normalization
-
-Normalize to:
-
-```text
-waiting
-running
-completed
-retried
-failed
-cancelled
-```
-
-If runtime code uses `canceled`, convert it to `cancelled`.
-
-Unknown states should be handled explicitly and visibly rather than silently treated as completed.
-
----
-
-# 10. Selection behavior
-
-The Web Component emits `job-select`.
-
-Blazor may store the selected job ID or update existing selected-job state.
-
-However:
-
-**do not display the old job detail panel in this iteration.**
-
-The complete available dashboard area belongs to the monitor.
-
-Selection is retained for:
-
-- visual focus,
-- future details behavior,
-- diagnostics,
-- compatibility with existing presentation state.
-
----
-
-# 11. Replacing the old ScatterChart frontend
-
-If the old `BlazorExpress.ChartJS` / ScatterChart implementation still exists:
-
-1. integrate and compile the new wrapper first,
-2. verify snapshot rendering,
-3. then remove old frontend-specific ChartJS/ScatterChart files/references,
-4. remove unused JS/CSS/package references,
-5. do not remove unrelated backend/projection behavior.
-
-If the old frontend is already removed, do not reintroduce it.
-
----
-
-# 12. Dark IDE theme
-
-The component's default styling is dark developer/diagnostic UI.
-
-The theme is owned by the Web Component through centralized CSS variables/tokens.
-
-Blazor should not duplicate the component's internal styling.
-
-The host may provide outer layout sizing only.
-
----
-
-# 13. Asset synchronization
-
-Do not manually maintain two divergent copies of the component.
-
-Choose one clear source of truth under:
-
-```text
-tools/TplQueue.JobMonitor
-```
-
-and define how assets reach `wwwroot/job-monitor`.
-
-Acceptable approaches include:
-
-- explicit copy step/script,
-- MSBuild target,
-- documented manual packaging step for the sample.
-
-The selected approach must be obvious and deterministic.
-
----
-
-# 14. Verification
-
-## Build
-
-Run the affected project builds and, where workspace dependencies are available, the complete solution build.
-
-Record exact commands and results.
-
-## Existing tests
-
-Run all relevant existing TplQueue tests.
-
-## Core/channel tests if instrumentation is added
-
-Verify:
-
-- channel range,
-- uniqueness among concurrent executions,
-- release on completion,
-- release on failure,
-- release on cancellation,
-- stability during execution,
-- FifoQ = channel 0,
-- independent channel pools per queue instance.
-
-## Frontend behavior
-
-Verify:
-
-- `ParallelQ`, `FifoQ`, `CacheQ` show correct `MaxParallelism`,
-- jobs use actual channels,
-- waiting/unassigned behavior is explicit,
-- same-channel nodes do not overlap,
-- dependency lines render,
-- cross-queue dependencies render,
-- search by name/ID/description works,
-- graph focus works,
-- hover displays required information including metadata,
-- queue label collapses to first letter when necessary,
-- 15-channel queue remains usable through horizontal scrolling,
-- history scrollbar/reference datetime works,
-- dark IDE theme is the default,
-- no details panel is present.
-
-## Lifecycle
-
-Verify:
-
-- no duplicate observer subscriptions,
-- no duplicate DOM event subscriptions,
-- navigation away/back works,
-- disposal produces no `ObjectDisposedException`,
-- no JS interop occurs after disposal.
-
----
-
-# 15. Final implementation report
-
-Codex must finish with:
-
-- architecture discovered,
-- channel source and semantics,
-- whether Core changed,
-- all changed files grouped by project,
-- removed legacy frontend files,
-- build commands/results,
-- test commands/results,
-- browser/demo verification,
-- remaining limitations or assumptions.
-
-Do not report a requirement as satisfied unless it was actually verified.
+Node.js 20+ serves the demo at http://127.0.0.1:4178/. No install/bundle step is
+needed. Open /tests/browser.html for standalone acceptance. On the running Debug
+host, open /job-monitor/tests/blazor.html for circuit, channel/selection and
+navigation/disposal checks. HTTP prerender success alone is not interactive coverage.
+
+For headless CLI runs append `?automation=1`. Both harnesses use the demo server
+on 4178 for a test-only page-load barrier, even when Blazor runs on another port.
+Keep that server running and use the real clock; premature DOM dumps can still
+say Running. Completion sets `html[data-result="passed"]` and a passed/failed
+summary. The barrier times out after 45 seconds. Overriding demo PORT does not
+change the harnesses' hardcoded automation port. This is not a production dependency.
+
+| Area | Acceptance to preserve |
+| --- | --- |
+| Projection/mapper | Legacy/null channels, range before mutation, late Started enrichment, lifecycle non-regression, enqueue/start distinction, channel change clearing start, detached snapshots and presentation-only serialization. |
+| JS model/layout | Invalid input, exact centers, compact pitch, grouping without displacement, null lanes, retained enqueue positions and directed assignment edges with unchanged dependency endpoints. |
+| Browser | Zoom/overview restoration, fixed ruler, overflow, U label/tooltip, keyboard focus/expansion, search reveal, selection and disposal. |
+| Blazor | Observer snapshots through a real circuit, channel values, retained enqueue strips/connectors after completion, selection bridge and safe navigation away/back. |
+| Runtime contract, when changed in its repository | Channel range, concurrent uniqueness, retry stability, terminal release, FIFO zero and independent queues. |
+
+Recorded implementation validation: host build passed with zero warnings/errors;
+25 focused projection tests and 111 total Usage integration tests passed; syntax
+checks covered 15 JS modules; 19 layout/model tests, 20 standalone browser checks
+and 3 Blazor circuit checks passed. The compact-U follow-up reran all 20 standalone
+checks successfully. The integration test project had seven existing nullable/
+unused-field warnings. Coverage was collected; no baseline-gate result was claimed.
+These results are historical and were not newly executed for this documentation
+update. Future reports must state exact commands and actual verification.
+
+## 9. Troubleshooting and limits
+
+| Symptom | What to check |
+| --- | --- |
+| Completed job remains in U | Was a matching channel-bearing Started event delivered? Terminal metadata alone is insufficient. |
+| Two jobs share a count marker | Check start times and pixel resolution. Sequential starts can share a parsed millisecond; inspect the list. |
+| U has a count but no visible jobs | Total count covers the snapshot; tooltip gives the interval count. Search navigates to older jobs. |
+| Source changes missing in Blazor | Rebuild to synchronize generated assets; do not patch the generated copy. |
+| Live mode stops on every update | Remove optional referenceTime from live snapshots. The C# DTO omits it. |
+| Empty or wrongly sized viewport | Check explicit height, module/CSS loading and viewport ResizeObserver behavior. |
+| Headless output remains Running | Check the 4178 barrier server and wait for data-result. |
+| IJobExecutionEvent does not resolve | Use coordinated source references or a compatible package version. |
+
+This is materialized state, not durable replay. The finite sample's projection and
+event-deduplication set need retention limits for continuous streams. Observer
+delivery is asynchronous/best-effort; WaitAsync does not wait for observers or
+cache acknowledgment. The sample memory cache is not a durable spool. Missing
+observations, millisecond resolution, large graphs and connector crossings remain
+limits.
+
+The reusable component accepts other producers with the same semantics. Contract
+generation, another framework, custom hubs, durable history, touch popovers and
+intermediate edge-routing elements require separate decisions. Public product
+docs/site publishing remain owned by Adapter's language trees; this runbook does
+not publish private Core implementation details or change that boundary.

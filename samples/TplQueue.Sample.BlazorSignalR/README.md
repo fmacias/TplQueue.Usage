@@ -7,9 +7,15 @@ The full-area `<job-queue-timeline>` Web Component displays actual logical
 execution channels, vertical time, explicit dependency edges, search, graph focus,
 zoom and history navigation. Waiting jobs without a runtime channel are explicitly
 unassigned in a collapsible strip. Assigned positions use channel-bearing Started
-event timestamps, with enqueue time retained as metadata. Jobs missing that start
+event timestamps. Recorded enqueue markers remain in Unassigned after assignment,
+with directed connectors to their Started positions when both are visible. Both
+positions select the same job; enqueue time also remains in metadata. Jobs missing that start
 event remain Unassigned until it arrives. Hover shows bounded metadata; there is
 no permanent details panel.
+
+Expand **U** to inspect enqueue history. Searching for a job also expands its strip
+and navigates to its execution time. The finite workload may finish before the
+browser opens; search or history navigation reveals its recorded markers.
 
 See the maintained [architecture and contract guide](../../docs/architecture/blazor-consumer-sample.md)
 and [standalone component guide](../../tools/TplQueue.JobMonitor/README.md).

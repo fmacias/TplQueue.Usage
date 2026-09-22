@@ -1,5 +1,7 @@
 ﻿import { options } from './config.js';
 
+import { positions } from './model.js';
+
 function timeTicks(start, end, pixelsPerMs, plotTop) {
   const desired = Math.max(1, 48 / pixelsPerMs);
   const magnitude = 10 ** Math.floor(Math.log10(desired));
@@ -28,7 +30,7 @@ function groupMarkers(nodes, config, start, end) {
       if (!members.length) return;
       if (members.length === 1) { markers.push(members[0]); return; }
       const first = members[0], last = members.at(-1);
-      const cluster = { kind: 'cluster', id: JSON.stringify(members.map(n => n.id)),
+      const cluster = { kind: 'cluster', id: JSON.stringify(members.map(n => n.markerId)),
         queueId: first.queueId, queueName: first.queueName, channel: first.channel,
         x: first.x, y: (first.y + last.y) / 2, startY: first.y, endY: last.y,
         startTime: first.time, endTime: last.time, members,
@@ -57,9 +59,10 @@ export function layout(model, input = {}) {
   const pixelsPerMs = (referenceY - plotTop) / windowMs;
   const channelWidth = Math.max(config.minChannelWidth, config.channelWidth);
   const markerSize = Math.min(config.maxMarkerSize, config.minMarkerSize * config.scale);
+  const points = positions(model);
   let x = config.gutter;
   const queues = model.queues.map(q => {
-    const unassigned = model.jobs.filter(j => j.queueId === q.id && j.channel === null);
+    const unassigned = points.filter(j => j.queueId === q.id && j.channel === null);
     const hasUnassigned = unassigned.length > 0;
     const unassignedExpanded = hasUnassigned && (input.expandedUnassigned?.has(q.id) ?? false);
     const unassignedWidth = hasUnassigned ? (unassignedExpanded ? config.unassignedExpandedWidth : config.unassignedCollapsedWidth) : 0;
@@ -79,7 +82,7 @@ export function layout(model, input = {}) {
     return queue;
   });
   const byQueue = new Map(queues.map(q => [q.id, q]));
-  const nodes = model.jobs.map(job => {
+  const nodes = points.map(job => {
     const queue = byQueue.get(job.queueId);
     const trueY = referenceY + (job.time - referenceTime) * pixelsPerMs;
     return { ...job, kind: 'job', x: job.channel === null ? queue.unassignedX : queue.channels[job.channel].x,
@@ -88,21 +91,34 @@ export function layout(model, input = {}) {
       hidden: job.channel === null && !queue.unassignedExpanded };
   });
   const { markers, clusters } = groupMarkers(nodes, config, startTime, referenceTime);
-  const byId = new Map(nodes.map(n => [n.id, n])), representatives = new Map();
+  // Dependency endpoints stay on the current job position, never its retained enqueue point.
+  const byId = new Map();
+  for (const node of nodes) if (!byId.has(node.id)) byId.set(node.id, node);
+  const representatives = new Map();
   for (const marker of markers)
-    for (const member of marker.members ?? [marker]) representatives.set(member.id, marker);
+    for (const member of marker.members ?? [marker]) representatives.set(member.markerId, marker);
   const edges = [];
-  let missingEdges = 0;
-  for (const node of nodes) for (const id of node.dependsOn) {
-    if (!byId.has(id)) { missingEdges++; continue; }
-    const from = representatives.get(id), to = representatives.get(node.id);
-    if (!from || !to || from === to) continue;
+  const connect = (source, target, kind) => {
+    const from = representatives.get(source.markerId), to = representatives.get(target.markerId);
+    if (!from || !to || from === to) return;
     const dx = to.x - from.x, dy = to.y - from.y;
     const length = Math.max(Math.abs(dx), Math.abs(dy));
-    const a = from.size / 2 / length, b = to.size / 2 / length;
-    edges.push({ from: id, to: node.id,
+    if (!length) return;
+    // Assignment arrowheads must stop at the visible outline, not underneath it.
+    const fromSize = kind === 'assignment' ? from.targetSize ?? from.size : from.size;
+    const toSize = kind === 'assignment' ? to.targetSize ?? to.size : to.size;
+    const a = fromSize / 2 / length, b = toSize / 2 / length;
+    edges.push({ from: source.id, to: target.id, fromMarker: source.markerId, toMarker: target.markerId, kind,
       path: `M ${from.x + dx * a} ${from.y + dy * a} L ${to.x - dx * b} ${to.y - dy * b}` });
+  };
+  let missingEdges = 0;
+  for (const node of byId.values()) for (const id of node.dependsOn) {
+    if (!byId.has(id)) { missingEdges++; continue; }
+    connect(byId.get(id), node, 'dependency');
   }
+  for (const node of nodes)
+    if (node.phase === 'enqueue' && byId.get(node.id).channel !== null)
+      connect(node, byId.get(node.id), 'assignment');
   return { queues, nodes, markers, clusters, edges, missingEdges, width: x + 8, height,
     referenceY, referenceTime, plotTop, startTime, windowMs, markerSize,
     ticks: timeTicks(startTime, referenceTime, pixelsPerMs, plotTop),

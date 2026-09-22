@@ -14,7 +14,8 @@ document.querySelector('#arrivals').addEventListener('click', e => {
   pending = null;
   snapshot = sampleData();
   delete snapshot.referenceTime;
-  snapshot.jobs = snapshot.jobs.map(j => ({...j, observedAt:new Date(Date.parse(j.observedAt)+shift).toISOString()}));
+  snapshot.jobs = snapshot.jobs.map(j => ({...j, observedAt:new Date(Date.parse(j.observedAt)+shift).toISOString(),
+    enqueuedAt:j.enqueuedAt == null ? null : new Date(Date.parse(j.enqueuedAt)+shift).toISOString()}));
   timeline.setData(snapshot); timeline.followLive(); e.target.textContent = 'Pause arrivals';
   interval = setInterval(() => {
     // Synthetic backend-style transition: keep identity and enqueue metadata, then
@@ -26,7 +27,7 @@ document.querySelector('#arrivals').addEventListener('click', e => {
     next++;
     const enqueuedAt = new Date().toISOString();
     pending = { id:`arrival-${next}`, name:`Live measurement ${next}`, description:'Synthetic demo arrival', queueId:'parallel',
-      channel:null, observedAt:enqueuedAt, state:'waiting', dependsOn:[],
+      channel:null, observedAt:enqueuedAt, enqueuedAt, state:'waiting', dependsOn:[],
       metadata:{sequence:next,enqueuedAt,timestampSource:'Enqueued'}, durationMs:null };
     snapshot.jobs.push(pending);
     snapshot.jobs = snapshot.jobs.slice(-100);

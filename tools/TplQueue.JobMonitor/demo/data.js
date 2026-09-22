@@ -11,7 +11,8 @@ export function sampleData({ denseTiming = false } = {}) {
     job('normalize-units','parallel',0,-2.8,'completed',['validate-measurements']),
     job('filter-outliers','parallel',1,-2.8,'retried',['validate-measurements']),
     job('calculate-average','parallel',2,-2.8,'failed',['validate-measurements']),
-    job('root-summary','cache',0,-1.5,'running',['normalize-units','filter-outliers','calculate-average'],{isRoot:true}),
+    job('root-summary','cache',0,-1.5,'running',['normalize-units','filter-outliers','calculate-average'],
+      {isRoot:true,enqueuedAt:'2026-09-17T11:59:56.000Z'}),
     job('waiting-batch','cache',null,-1,'waiting',[],{rootJobId:null}),
     job('cancelled-batch','cache',1,-.3,'canceled',[],{rootJobId:null})];
   for (let i=0;i<15;i++) jobs.push(job(`dense-${i}`,'dense',i,(i%3)-3,['running','completed','retried'][i%3],[],{rootJobId:null}));
