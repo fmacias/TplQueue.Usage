@@ -1,7 +1,7 @@
 # Integration into `TplQueue.Sample.BlazorSignalR`
 
 This is the integration and maintenance runbook for Usage commits `ac680c2` and
-`931d6f0`, updated September 21, 2026. Integration is implemented. Preserve these
+`931d6f0`, updated September 22, 2026 for event-driven refresh. Integration is implemented. Preserve these
 decisions rather than repeating the original exploratory choice of channels,
 frontend framework or asset-copy mechanism.
 
@@ -55,6 +55,12 @@ they are not generated from an authoritative API schema.
 The additive public `IJobExecutionEvent : IJobEvent` interface in Abstractions
 exposes `int? ExecutionChannel`. Existing IJobEvent implementations need not
 implement it. The compatible Abstractions contract was committed as `2c4e4f0`.
+
+This is one event object on the existing `IJobEvent` stream, with optional channel
+metadata, not a separate channel event. Retain this compatible extension for now.
+Moving a required nullable property onto `IJobEvent` would break existing
+implementations; reserve that simplification for a deliberate contract-version
+change. See the [contract decision](../../docs/architecture/blazor-consumer-sample.md#logical-execution-channels).
 
 A non-null channel is queue-local execution capacity in `0..MaxParallelism-1`.
 The runtime captures it while capacity is held and retains it in terminal events
@@ -225,11 +231,25 @@ and uses InvokeAsync for refreshes. An interlocked pending flag coalesces update
 Disposal marks the page disposed and unsubscribes. The singleton store owns runtime
 facts; each circuit owns selection and presentation state.
 
+After that initial load, only new accepted observer events request a data update.
+Deduplicated or rejected observations do not notify the view. Coalescing may send
+one snapshot for several observations, preserving the latest accumulated state.
+The DTOs represent that materialized state, not one DTO per runtime event.
+
 JobMonitor.razor renders an ElementReference-backed custom element. OnAfterRenderAsync
 imports `./job-monitor/integrations/blazor/job-monitor.js`, creates one
 DotNetObjectReference and attaches it. A SemaphoreSlim gate serializes initialization,
 snapshot updates and disposal. Revision counters send the latest pending snapshot
-without competing update loops.
+without competing update loops. Revisions advance only when the snapshot instance
+changes, so selection callbacks and unrelated parent renders do not resend it.
+Treat delivered snapshots as immutable and replace the instance for changed data.
+
+The standalone monitor advances live time on `setData`, using the browser clock
+minus `liveLagMs`, and has no periodic refresh. Pause/history keeps the reference
+while new snapshots update state. Follow live and restoring a live overview catch
+up once. Its one-shot redraw scheduler coalesces data, user input and resize
+requests; it does not schedule itself again when idle. The demo's optional timer
+generates synthetic arrivals and is not a component refresh timer.
 
 The bridge's WeakMap stores one active connection per element. Attach first detaches
 a prior listener; update forwards only for attached elements; detach marks the
@@ -240,7 +260,7 @@ Async disposal marks the wrapper disposed, waits for the gate, detaches JS, and
 disposes the module/callback while tolerating circuit disconnection. Keep the gate
 alive for render work already queued on the circuit. Do not invoke JS from observer
 threads or add runtime subscriptions to the Web Component. The component separately
-cleans up DOM listeners, ResizeObserver and timers on disconnection. Navigation
+cleans up DOM listeners, ResizeObserver and any pending one-shot redraw on disconnection. Navigation
 away/back must not duplicate subscriptions.
 
 ## 7. Asset synchronization and host sizing
@@ -323,8 +343,8 @@ change the harnesses' hardcoded automation port. This is not a production depend
 | --- | --- |
 | Projection/mapper | Legacy/null channels, range before mutation, late Started enrichment, lifecycle non-regression, enqueue/start distinction, channel change clearing start, detached snapshots and presentation-only serialization. |
 | JS model/layout | Invalid input, exact centers, compact pitch, grouping without displacement, null lanes, retained enqueue positions and directed assignment edges with unchanged dependency endpoints. |
-| Browser | Zoom/overview restoration, fixed ruler, overflow, U label/tooltip, keyboard focus/expansion, search reveal, selection and disposal. |
-| Blazor | Observer snapshots through a real circuit, channel values, retained enqueue strips/connectors after completion, selection bridge and safe navigation away/back. |
+| Browser | No idle redraw or reference drift, snapshot-driven live advance, paused updates, idle reconnect, zoom/overview restoration, fixed ruler, overflow, U label/tooltip, keyboard focus/expansion, search reveal, selection and disposal. |
+| Blazor | Observer snapshots through a real circuit, idle view, no snapshot resend after selection, channel values, retained enqueue strips/connectors after completion, selection bridge and safe navigation away/back. |
 | Runtime contract, when changed in its repository | Channel range, concurrent uniqueness, retry stability, terminal release, FIFO zero and independent queues. |
 
 Recorded implementation validation: host build passed with zero warnings/errors;
@@ -335,6 +355,21 @@ checks successfully. The integration test project had seven existing nullable/
 unused-field warnings. Coverage was collected; no baseline-gate result was claimed.
 These results are historical and were not newly executed for this documentation
 update. Future reports must state exact commands and actual verification.
+
+Event-driven refresh validation (September 22, 2026): the focused source-mode
+host build above passed with zero warnings/errors. The source-mode `dotnet test`
+command above, with `--collect:"XPlat Code Coverage" --results-directory
+artifacts/refresh-validation`, passed all 115 NUnit tests and produced a Cobertura
+report; the test project retained seven existing nullable/unused-field warnings.
+`node scripts/check.mjs` checked 15 modules and `node --test tests/layout.test.js`
+passed 24 tests. Headless Edge passed all 24 standalone checks at
+`/tests/browser.html?automation=1` and all five actual circuit checks at
+`/job-monitor/tests/blazor.html?automation=1`. The new idle/reconnect browser
+regressions reproduced the timer-driven failure before implementation.
+No local pack was needed: Usage has no pack-local script and no library/package
+contract changed. This validates the documented sibling-source preview path;
+package-only build/test scripts and the repository coverage baseline gate were
+not run. Collected coverage is not a claim that the baseline gate passed.
 
 ## 9. Troubleshooting and limits
 

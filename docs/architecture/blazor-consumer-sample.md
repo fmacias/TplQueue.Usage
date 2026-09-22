@@ -43,6 +43,16 @@ terminal events, so asynchronous delivery remains correct after capacity reuse.
 No scheduling, retry, cancellation, dependency or cache-acknowledgment semantics
 are assigned to the frontend. Implementation details stay in private Core docs.
 
+Keep `ExecutionChannel` on the optional `IJobExecutionEvent` extension for the
+current compatible API. An execution event is already one `IJobEvent` object;
+the channel does not need a separate event or observer stream. Adding a required
+nullable member to `IJobEvent` would still break existing implementations.
+For a future breaking contract version, moving `int? ExecutionChannel` onto
+`IJobEvent` could simplify consumers if channel metadata becomes universal.
+It must remain nullable before assignment or when unknown, queue-local, and
+captured at publication time, including terminal events. This refresh change
+does not require that migration.
+
 Queued jobs and events without both channel metadata and a captured channel-bearing
 Started event project with channel null. They appear in a collapsible Unassigned
 strip outside the queue's numbered channels. The strip starts collapsed, reports
@@ -87,7 +97,10 @@ details panel reserves viewer space. State normalization belongs to the model;
 unknown states remain visible.
 
 The overview displays five seconds ending at the reference datetime at the bottom.
-Live following moves older jobs upward; Pause freezes the window. History
+Live following advances to the browser clock minus `liveLagMs` only on accepted
+snapshot arrival or an explicit Follow live/restore-live action. There is no
+periodic refresh; an idle view stays still. Pause freezes the window while new
+snapshots still update job state. History
 navigation preserves its duration. A fixed left UTC ruler aligns with exact job
 centers. The controller owns time; the renderer never reads the clock.
 
@@ -112,6 +125,16 @@ with a per-component gate. It creates one callback reference and JS subscription
 coalesces pending snapshots, and tolerates circuit disconnection during cleanup.
 The page dispatches observer notifications through InvokeAsync, coalesces queued
 refreshes and unsubscribes on disposal. No observer thread calls JavaScript.
+
+The page loads one initial snapshot and then refreshes only for new accepted
+`IJobEvent` observations. Duplicate/rejected events do not notify the view.
+The wrapper tracks snapshot identity so selection callbacks and unrelated parent
+renders do not resend data. Replace detached snapshots; never mutate a delivered
+instance. Several observations may be coalesced into the latest snapshot: DTOs
+represent accumulated job state, not a one-to-one event log or a CLR interface
+serialization. The standalone component receives `setData` calls from its host;
+it has no runtime subscription or polling timer. Its one-shot redraw scheduler
+coalesces incoming data, user input and resize requests, and stops when idle.
 
 MSBuild synchronizes the single component source tree into the ignored
 `wwwroot/job-monitor` directory before static asset discovery, then copies assets

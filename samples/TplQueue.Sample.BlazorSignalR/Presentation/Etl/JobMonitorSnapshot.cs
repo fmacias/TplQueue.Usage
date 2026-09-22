@@ -1,6 +1,10 @@
 namespace TplQueue.Sample.BlazorSignalR.Presentation.Etl;
 
-/// <summary>Detached presentation values sent to the reusable job monitor.</summary>
+/// <summary>
+/// Detached materialized view of observed job events, sent to the reusable job monitor.
+/// Replace the snapshot after a projection change; do not mutate it after delivery.
+/// This is accumulated job state, not a one-to-one runtime event transport contract.
+/// </summary>
 public sealed record JobMonitorSnapshot(IReadOnlyList<JobMonitorQueue> Queues, IReadOnlyList<JobMonitorJob> Jobs);
 
 /// <summary>Queue identity and its configured execution capacity.</summary>

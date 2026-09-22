@@ -1,6 +1,6 @@
 # TplQueue Job Monitor — Adopted frontend design and maintenance instructions
 
-This document records the implemented design as of September 21, 2026, including
+This document records the implemented design as of September 22, 2026, including
 the decisions reached after the original sketch. The baseline is Usage commits
 `ac680c2` and `931d6f0`. Earlier alternatives below are history, not instructions
 to implement them again.
@@ -27,6 +27,7 @@ corresponding original requirements:
 
 | Earlier idea | Adopted behavior and reason |
 | --- | --- |
+| Refresh live view every 250 ms | Advance on incoming snapshots; stay idle between events. User input and resizing still redraw locally. |
 | Circular jobs | A small square locates the exact timestamp; a larger outline and state symbol provide a readable target. |
 | Reference near the vertical center | A five-second overview ends at the bottom reference. Older events are above it. |
 | Fixed four pixels per millisecond | Resolution comes from plot height and visible interval. Five seconds cannot guarantee a separate pixel for every millisecond. |
@@ -193,9 +194,11 @@ It never counts toward MaxParallelism and never maps null to channel 0.
 
 ## 8. Navigation, search and connectors
 
-Live following updates every 250 ms using `Date.now() - liveLagMs` (default lag
-zero); older jobs move upward. Pause freezes the reference. The renderer never
-reads the clock.
+Live following updates on each accepted `setData(snapshot)` using
+`Date.now() - liveLagMs` (default lag zero); older jobs move upward only when new
+data arrives. There is no recurring timer or idle redraw. Explicit Follow live
+and restoration of live overview catch up once to the clock. Pause freezes the
+reference while snapshots still update job state. The renderer never reads the clock.
 
 History supports a native vertical scrollbar, wheel, UTC reference input, and
 viewport ArrowUp/ArrowDown or PageUp/PageDown. Arrow keys move by a tenth of the
@@ -234,7 +237,8 @@ Structured values are summarized. Use safe DOM text, never injected HTML.
 
 Give the element an explicit height. Observe both host and viewport so delayed
 stylesheet loading does not leave stale geometry. The controller coalesces redraws,
-aborts listeners, disconnects ResizeObserver and clears timers on disconnection.
+aborts listeners, disconnects ResizeObserver and cancels a pending one-shot redraw
+on disconnection. That redraw coalesces requests; it never reschedules itself.
 Reconnection must not duplicate handlers. Snapshots are materialized current state,
 not every lifecycle event. An append API needs a separate ordered contract and tests.
 

@@ -13,8 +13,16 @@
     private bool _disposed;
     private long _revision;
     private long _sentRevision = -1;
+    private JobMonitorSnapshot? _observedSnapshot;
 
-    protected override void OnParametersSet() => _revision++;
+    protected override void OnParametersSet()
+    {
+        // The parent replaces this detached snapshot only after a projection change.
+        // Selection callbacks and unrelated parent renders must not resend it.
+        if (ReferenceEquals(_observedSnapshot, Snapshot)) return;
+        _observedSnapshot = Snapshot;
+        _revision++;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

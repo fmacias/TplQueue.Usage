@@ -28,6 +28,22 @@ await check('real channel values and selection round trip',async()=>{
   const node=v.shadowRoot.querySelector('.selected title');
   assert(node && /Channel: \d/.test(node.textContent),'runtime channel is known');
 });
+await check('idle circuit and selection do not resend the projection snapshot',async()=>{
+  await until(()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
+    .filter(q=>q.dataset.completed==='6').length===3);
+  await wait(300);
+  const v=viewer(),original=v.setData;
+  let updates=0;
+  v.setData=function(snapshot){updates++;return original.call(this,snapshot);};
+  try {
+    v.followLive(); await wait(100);
+    const before=v.referenceTime;
+    await wait(650);
+    assert(v.referenceTime===before && updates===0,'idle circuit has no refresh');
+    v.focusJob(v.selectedJobId); await wait(300);
+    assert(updates===0,'selection callback must not resend unchanged data');
+  } finally { v.setData=original; }
+});
 await check('navigation away and back disposes and reconnects one wrapper',async()=>{
   frame.contentWindow.Blazor.navigateTo('/Error');
   await until(()=>!viewer());

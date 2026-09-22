@@ -11,6 +11,40 @@ async function check(name, action) {
   catch(error) { failed++; li.className='fail'; li.textContent=`FAIL ${name}: ${error.message}`; }
 }
 viewer.setData(sampleData()); viewer.setReferenceTime(reference); await frame();
+await check('live view stays idle until a new snapshot arrives', async () => {
+  viewer.followLive(); await frame();
+  const before=viewer.referenceTime;
+  let mutations=0;
+  const observer=new MutationObserver(records=>mutations+=records.length);
+  observer.observe(viewer.shadowRoot.querySelector('.timeline'),{childList:true,subtree:true,attributes:true});
+  try {
+    await new Promise(resolve=>setTimeout(resolve,650));
+    assert(viewer.referenceTime===before,'idle reference must not follow a timer');
+    assert(mutations===0,'idle SVG must not redraw');
+    const snapshot=sampleData(); delete snapshot.referenceTime;
+    viewer.setData(snapshot); await frame();
+    assert(viewer.referenceTime>before && viewer.isFollowingLive,'snapshot advances live reference');
+    assert(mutations>0,'snapshot redraws the view');
+  } finally { observer.disconnect(); viewer.setReferenceTime(reference); await frame(); }
+});
+await check('snapshots update paused state without moving its reference', async () => {
+  viewer.setReferenceTime(reference); await frame();
+  const snapshot=sampleData(); delete snapshot.referenceTime;
+  snapshot.jobs.push({...snapshot.jobs[0],id:'paused-arrival'});
+  viewer.setData(snapshot); await frame();
+  assert(viewer.referenceTime===Date.parse(reference) && !viewer.isFollowingLive,'history remains fixed');
+  assert(viewer.shadowRoot.querySelector('.mode').textContent.includes(`${snapshot.jobs.length} jobs`),'new data appears while paused');
+  viewer.setData(sampleData()); await frame();
+});
+await check('reconnecting a live monitor does not restart periodic refresh', async () => {
+  viewer.followLive(); await frame();
+  const before=viewer.referenceTime;
+  try {
+    viewer.remove(); document.body.append(viewer); await frame();
+    await new Promise(resolve=>setTimeout(resolve,650));
+    assert(viewer.referenceTime===before && viewer.isFollowingLive,'reconnection retains an idle live reference');
+  } finally { viewer.setReferenceTime(reference); await frame(); }
+});
 await check('dark default and all logical channels', () => {
   assert(getComputedStyle(viewer).getPropertyValue('--jm-bg').trim()==='#1e1e1e','dark theme');
   assert(viewer.shadowRoot.querySelectorAll('.channel-line').length===21,'channel count');

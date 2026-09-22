@@ -44,6 +44,13 @@ viewer.addEventListener('job-select', event => console.log(event.detail.jobId));
 Give the element an explicit height. Snapshots replace data atomically. Invalid
 IDs, timestamps, queue references and channels are rejected before changing the
 view. IDs must be nonempty strings; timestamps must specify a timezone.
+The host pushes a replacement snapshot after a new observed event changes its
+projection. The component never polls: `setData` drives data redraws and advances
+the live reference to `Date.now() - liveLagMs`. Between snapshots the view stays
+still. User interactions and resizing may redraw locally. In paused/history mode,
+incoming data updates state without moving the reference. An explicit optional
+`referenceTime` in a snapshot still sets the reference and enters history mode.
+Snapshots represent accumulated job state, not individual `IJobEvent` messages.
 `channel` is required and is either null or an integer in `0..maxParallelism-1`.
 Null jobs and retained enqueue markers belong to a separate **Unassigned** strip outside the numbered execution
 channels. Its label is always U, with the full Unassigned name in the hover tooltip
@@ -84,7 +91,7 @@ Text is rendered with textContent, never inserted as HTML.
 | `setData(snapshot)` | Validate, detach and replace the current snapshot |
 | `configure(options)` | Update presentation settings; never reconfigure a runtime queue |
 | `setReferenceTime(ISO or epoch milliseconds)` | Set the window end and enter historical mode |
-| `followLive()` | Return to five seconds and follow clock minus configured `liveLagMs` (default zero) |
+| `followLive()` | Return to five seconds, catch up to clock minus `liveLagMs` (default zero), then advance only on incoming snapshots |
 | `showOverview()` | Return to five seconds; restore the time and live/history mode saved before inspection |
 | `focusJob(id, phase?)` | Focus the current position, or `enqueue`/`execution`; expand its history strip and select the same logical job |
 | `clearFocus()` | Remove selection and graph emphasis |
@@ -114,8 +121,9 @@ also announces metadata through an accessible status region.
 ## Timing and limits
 
 The overview displays the five seconds ending at the reference time, with older
-jobs above and the reference at the bottom. Live following advances that window;
-Pause freezes it. History navigation preserves the interval. The UTC time ruler
+jobs above and the reference at the bottom. Live following advances that window
+when snapshots arrive; no interval timer runs. Pause freezes its reference while
+new data still updates state. History navigation preserves the interval. The UTC time ruler
 stays on the left during horizontal scrolling, with adaptive readable tick spacing
 (normally 500 ms in a sufficiently tall five-second view).
 

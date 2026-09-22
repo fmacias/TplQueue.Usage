@@ -10,7 +10,7 @@ export class JobQueueTimeline extends HTMLElement {
   #config = options(); #widths = {}; #reference = Date.now(); #live = true;
   #selected = null; #focused = null; #hovered = null;
   #selectedPhase = null;
-  #timer; #resize; #events; #frame; #view; #drag;
+  #resize; #events; #frame; #view; #drag;
   #historyMin = 0; #historyMax = 1; #historyTarget = 0;
   #overview = null; #inspectionIds = null;
   #expandedUnassigned = new Set();
@@ -71,14 +71,11 @@ export class JobQueueTimeline extends HTMLElement {
     this.#resize = new ResizeObserver(() => this.#schedule());
     this.#resize.observe(this);
     this.#resize.observe(this.shadowRoot.querySelector('.viewport'));
-    this.#timer = setInterval(() => {
-      if (this.#live && !this.#drag) { this.#reference = Date.now() - this.#config.liveLagMs; this.#schedule(); }
-    }, 250);
     this.#schedule();
   }
   disconnectedCallback() {
     this.#events?.abort(); this.#events = null;
-    this.#resize?.disconnect(); clearInterval(this.#timer); clearTimeout(this.#frame);
+    this.#resize?.disconnect(); clearTimeout(this.#frame);
     this.#frame = null; this.#drag = null; this.#hovered = null;
   }
   setData(snapshot) {
@@ -87,6 +84,8 @@ export class JobQueueTimeline extends HTMLElement {
     for (const id of this.#expandedUnassigned)
       if (!model.queues.some(q => q.id === id)) this.#expandedUnassigned.delete(id);
     if (model.referenceTime != null) this.setReferenceTime(model.referenceTime);
+    // Incoming snapshots drive live time. Idle monitors never poll or redraw on a clock.
+    else if (this.#live) this.#reference = Date.now() - this.#config.liveLagMs;
     if (this.#selected && !model.jobs.some(j => j.id === this.#selected)) this.clearFocus();
     else if (this.#selected) this.#focused = connected(model, this.#selected);
     this.#renderInspection(); this.#search(); this.#schedule();

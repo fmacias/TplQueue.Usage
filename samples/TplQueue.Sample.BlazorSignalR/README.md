@@ -13,6 +13,14 @@ positions select the same job; enqueue time also remains in metadata. Jobs missi
 event remain Unassigned until it arrives. Hover shows bounded metadata; there is
 no permanent details panel.
 
+After the initial snapshot, new accepted `IJobEvent` observations trigger projection
+notifications and coalesced updates through the Blazor circuit. Duplicate events
+do not trigger another update. The standalone monitor has no refresh interval:
+live time advances on snapshot arrival and stays still when idle. Pause/history
+keeps the chosen reference while incoming snapshots update job state. Selection,
+zoom and resizing still redraw locally; selection callbacks do not resend the
+unchanged snapshot. DTOs represent accumulated job state derived from events.
+
 Expand **U** to inspect enqueue history. Searching for a job also expands its strip
 and navigates to its execution time. The finite workload may finish before the
 browser opens; search or history navigation reveals its recorded markers.

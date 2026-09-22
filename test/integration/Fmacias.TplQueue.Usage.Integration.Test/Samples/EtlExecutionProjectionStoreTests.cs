@@ -603,6 +603,39 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             Assert.That(job.Channel, Is.EqualTo(0));
         }
 
+        [Test]
+        public void Observer_NotifiesViewOnlyForNewValidEvents_AndStopsAfterUnsubscription()
+        {
+            // Arrange
+            var store = CreateStore();
+            var observer = new EtlQueueObserver(store, NullLogger<EtlQueueObserver>.Instance);
+            var snapshots = new List<JobMonitorSnapshot>();
+            EventHandler subscriber = (_, _) => snapshots.Add(JobMonitorMapper.Map(store.GetSnapshot()));
+            store.Changed += subscriber;
+            var info = Job(Guid.NewGuid(), "Observed job", ParallelQueueId);
+            var enqueued = Event(JobEventStatus.Enqueued, info, Utc(10, 15, 0));
+
+            // Act
+            observer.OnNext(enqueued);
+            observer.OnNext(enqueued);
+            observer.OnNext(new ChannelEvent(JobEventStatus.Started, info, Utc(10, 15, 1), 99));
+            observer.OnNext(new ChannelEvent(JobEventStatus.Started, info, Utc(10, 15, 1), 1));
+            store.GetSnapshot();
+            store.Changed -= subscriber;
+            observer.OnNext(new ChannelEvent(JobEventStatus.Successed, info, Utc(10, 15, 2), 1));
+
+            // Assert
+            Assert.Multiple(() =>
+            {
+                Assert.That(snapshots, Has.Count.EqualTo(2));
+                Assert.That(snapshots[0].Jobs.Single().State, Is.EqualTo("waiting"));
+                Assert.That(snapshots[0].Jobs.Single().Channel, Is.Null);
+                Assert.That(snapshots[1].Jobs.Single().State, Is.EqualTo("running"));
+                Assert.That(snapshots[1].Jobs.Single().Channel, Is.EqualTo(1));
+                Assert.That(store.GetSnapshot().Jobs.Single().Status, Is.EqualTo("completed"));
+            });
+        }
+
         private sealed class ChannelEvent : FakeJobEvent, IJobExecutionEvent
         {
             public ChannelEvent(JobEventStatus status, IJobInfo info, DateTimeOffset time, int channel)
