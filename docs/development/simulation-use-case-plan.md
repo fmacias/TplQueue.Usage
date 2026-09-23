@@ -60,22 +60,30 @@ Relevant maintained sources:
 
 ## Decisions to settle before dependent implementation
 
-These values are recommendations from the analysis, not accepted requirements or
-measured performance limits. Record the human decision here before fixing defaults.
+The normal graph limits below were confirmed by the human during P00 on 2026-09-23.
+They are scenario limits, not measured performance limits. Other proposals remain
+deferred until their dependent task; do not treat them as accepted defaults.
 
 | Decision | Proposal | Status |
 | --- | --- | --- |
-| Default graph size | 15 unique jobs including the root | Pending agreement |
-| Normal maximum | 50 unique jobs per root | Pending agreement |
-| Readable graph shape | Up to 8 levels, usually 2-4 branches | Pending agreement |
-| Tighter alternative | Default 10 jobs, maximum 30 | Available alternative |
-| Stress profile | 100-500 jobs, explicitly enabled and bounded | Pending agreement |
-| Standard delivery | One root every 3 seconds | Initial preset to validate |
-| Independent arrivals | Queue/scenario intervals of 2, 3 and 5 seconds | Initial preset to validate |
-| Burst delivery | Five small roots every 10 seconds | Initial preset to validate |
+| Default graph size | 15 unique jobs including the root | Accepted by human, 2026-09-23 (P00) |
+| Normal maximum | 50 unique jobs per root | Accepted by human, 2026-09-23 (P00) |
+| Normal graph depth | At most 8 levels on the longest dependency path, counting the root as one level | Accepted by human, 2026-09-23 (P00) |
+| Readable branching | Usually 2-4 branches | Deferred to UC06; proposal only |
+| Tighter alternative | Default 10 jobs, maximum 30 | Not selected; 15/50 accepted |
+| Stress profile | 100-500 jobs, explicitly enabled and bounded | Deferred to UC20; proposal only |
+| Standard delivery | One root every 3 seconds | Deferred to P02/UC02; preset to validate |
+| Independent arrivals | Queue/scenario intervals of 2, 3 and 5 seconds | Deferred to UC09; preset to validate |
+| Burst delivery | Five small roots every 10 seconds | Deferred to UC19; preset to validate |
 | Shared-root representation | Preserve one job identity and all dependency edges; decide how run/root memberships are exposed | Resolve before UC12 |
 | Continuous retention | Bound completed history and event fingerprints while retaining active graphs and their dependencies | Resolve before UC25 |
 | Project rename | Implementation becomes `TplQueue.Sample.Simulation`; contracts name remains unchanged until decided | Future preparation step |
+
+See the [P00 execution record](simulation-tasks/p00-record-decisions-and-establish-baseline.md#execution-record)
+for reference modes, retained tests, exact validation results and baseline limitations.
+Shared-root representation, continuous retention and the contracts-project name
+remain unresolved at their existing checkpoints. Delivery lifecycle and admission
+semantics remain proposals for P02; P00 does not approve them or change runtime defaults.
 
 Suggested profiles are 3-15 jobs for normal explanation, 16-30 for complex
 demonstrations, 31-50 for large interactive examples, and 100-500 for stress tests.
@@ -124,6 +132,35 @@ are separate limits. A shallow 500-job graph says little about a 500-level chain
     arrivals until UC25 retention and lifecycle acceptance are complete.
 
 ## Iteration workflow and definition of done
+
+### One task per thread
+
+Open a new thread with one task file. That file is the entry point: read its
+dependencies, this plan's shared rules and the applicable repository instructions.
+Use the recorded decisions and execution evidence on disk; do not depend on the
+previous thread's conversation. Implement only the selected task in that thread.
+
+Complete its validation, make the local commits, mark its status complete and check
+its entry in this plan. Commit those completion records as part of the task. Then
+stop: the next eligible task starts in a new thread opened by the human. Selecting
+the next task for the handoff does not authorize starting it in the current thread.
+
+Use this prompt in each new thread, replacing the path with the selected task:
+
+```text
+Execute only the task in <task-file-path>.
+Read its linked plan and applicable repository instructions. Check dependencies,
+implement the task, run the required validation and perform the staged review.
+Create the local commit(s), including the task's execution record and its completed
+checkbox in the main plan once acceptance passes. Preserve unrelated changes.
+If blocked, record the blocker and leave the task incomplete.
+Finish with the commit hashes, validation results and the next eligible task's
+file path and prompt for a new thread. Do not start the next task or push commits.
+```
+
+If dependencies or acceptance checks block completion, keep the main checkbox
+unchecked and record the task as blocked or in progress with the exact remaining
+work. A continuation thread resumes that same task before moving to dependent work.
 
 For each preparation step or use case:
 
@@ -190,7 +227,7 @@ zoom, history, reconnect and disposal only to the extent affected by the iterati
 
 ## Preparation checkpoints
 
-- [ ] **P00 - Record decisions and establish baseline.** Confirm normal graph limits,
+- [x] **[P00 - Record decisions and establish baseline](simulation-tasks/p00-record-decisions-and-establish-baseline.md).** Confirm normal graph limits,
   run current relevant checks, record reference mode and existing failures. Identify
   the integration tests to retain. Suggested commit, if decisions change this file:
   `docs(simulation): agree initial scenario limits and validation baseline`.
