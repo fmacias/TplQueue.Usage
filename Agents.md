@@ -61,6 +61,10 @@ If a step cannot be executed, state that clearly.
 
 ## Sample architecture and host profiles
 
+The implementation module is `samples/TplQueue.Sample.Simulation`; its contracts
+remain in `samples/TplQueue.Sample.Etl.Contracts`. Preserve ETL workflow/handler
+names and behavior until a task explicitly changes them.
+
 Read [Blazor frontend architecture and contract ownership](docs/architecture/blazor-consumer-sample.md)
 before modifying `samples/TplQueue.Sample.BlazorSignalR` or its ETL integration.
 That document consolidates the current architecture, generated-code policy,

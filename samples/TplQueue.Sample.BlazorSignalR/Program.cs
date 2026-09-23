@@ -3,7 +3,7 @@ using Fmacias.TplQueue.Core;
 using Fmacias.TplQueue.Microsoft.DependencyInjection;
 using TplQueue.Sample.BlazorSignalR.Components;
 using TplQueue.Sample.BlazorSignalR.Composition;
-using TplQueue.Sample.Etl.Composition;
+using TplQueue.Sample.Simulation.Composition;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();

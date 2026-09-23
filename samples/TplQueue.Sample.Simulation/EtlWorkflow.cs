@@ -5,11 +5,11 @@ using System.Collections.Generic;
 using System.Threading;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Etl.Contracts.Dto;
-using TplQueue.Sample.Etl.Handlers;
-using TplQueue.Sample.Etl.Payloads;
-using TplQueue.Sample.Etl.Runtime;
+using TplQueue.Sample.Simulation.Handlers;
+using TplQueue.Sample.Simulation.Payloads;
+using TplQueue.Sample.Simulation.Runtime;
 
-namespace TplQueue.Sample.Etl
+namespace TplQueue.Sample.Simulation
 {
     internal sealed class EtlWorkflow : IEtlWorkflow, IDisposable
     {

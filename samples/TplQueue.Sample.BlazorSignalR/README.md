@@ -1,6 +1,6 @@
 # TplQueue Blazor ETL job monitor
 
-Passive .NET 8 Interactive Server dashboard for `TplQueue.Sample.Etl`. The
+Passive .NET 8 Interactive Server dashboard for `TplQueue.Sample.Simulation`. The
 backend starts two three-job roots on each queue independently of browsers.
 
 The full-area `<job-queue-timeline>` Web Component displays actual logical

@@ -1,9 +1,9 @@
 using Fmacias.TplQueue.Contracts;
 using System;
 using System.Collections.Generic;
-using TplQueue.Sample.Etl.Payloads;
+using TplQueue.Sample.Simulation.Payloads;
 
-namespace TplQueue.Sample.Etl.Runtime
+namespace TplQueue.Sample.Simulation.Runtime
 {
     /// <summary>
     /// Restricts CacheQ payload hydration to the ETL contracts supported by this sample.

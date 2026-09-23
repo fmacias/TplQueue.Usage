@@ -6,7 +6,7 @@ using System.Linq;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Etl.Contracts.Dto;
 
-namespace TplQueue.Sample.Etl.Payloads
+namespace TplQueue.Sample.Simulation.Payloads
 {
     /// <summary>Carries immutable measurement snapshots into the ingest job.</summary>
     internal sealed class IngestMeasurementsPayload : IPayload

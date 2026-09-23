@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading;
 using TplQueue.Sample.Etl.Contracts;
 
-namespace TplQueue.Sample.Etl.Runtime
+namespace TplQueue.Sample.Simulation.Runtime
 {
     internal sealed class EtlQueueRuntime : IDisposable, IObserver<IJobEvent>
     {

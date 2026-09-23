@@ -50,7 +50,7 @@ That keeps the committed default stable while letting you validate a different p
 ## Blazor/ETL source-reference exception
 
 During preview advancement, `TplQueue.Sample.BlazorSignalR` and
-`TplQueue.Sample.Etl` contain explicit sibling-source references. Their builds
+`TplQueue.Sample.Simulation` contain explicit sibling-source references. Their builds
 require the sibling checkout layout even outside `WorkspaceTplQueue.sln`.
 Changing `TplQueuePackageVersion` does not convert those references to packages.
 See the [sample architecture and contract guide](../architecture/blazor-consumer-sample.md).

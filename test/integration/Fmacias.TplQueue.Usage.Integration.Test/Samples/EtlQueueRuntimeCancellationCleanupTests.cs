@@ -10,7 +10,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using TplQueue.Sample.Etl.Composition;
+using TplQueue.Sample.Simulation.Composition;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Etl.Contracts.Dto;
 
@@ -57,8 +57,10 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 "Failed enqueue state must not remain cancellable.");
         }
 
-        [Test]
-        public void CachePayloadGraph_RoundTripsThroughRegisteredResolverAndSerializer()
+        [TestCase(true)]
+        [TestCase(false)]
+        public void CachePayloadGraph_RoundTripsThroughRegisteredResolverAndSerializer(
+            bool useAssemblyQualifiedName)
         {
             using var provider = CreateServiceProvider(out var cacheQueueProxy);
             var workflow = provider.GetRequiredService<IEtlWorkflow>();
@@ -74,7 +76,9 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
 
             foreach (var payloadNode in payloadNodes)
             {
-                var payloadTypeName = payloadNode.PayloadType.AssemblyQualifiedName!;
+                var payloadTypeName = useAssemblyQualifiedName
+                    ? payloadNode.PayloadType.AssemblyQualifiedName!
+                    : payloadNode.PayloadType.FullName!;
                 var resolvedType = resolver.Resolve(payloadTypeName);
                 var serializedPayload = serializer.Serialize(
                     payloadNode.GetPayload(),
@@ -98,6 +102,12 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
 
             Assert.Multiple(() =>
             {
+                Assert.That(workflow.GetType().Assembly.GetName().Name,
+                    Is.EqualTo("TplQueue.Sample.Simulation"));
+                Assert.That(hydratedTypes.Select(type => type.Namespace),
+                    Is.All.EqualTo("TplQueue.Sample.Simulation.Payloads"));
+                Assert.That(typeof(IEtlWorkflow).Assembly.GetName().Name,
+                    Is.EqualTo("TplQueue.Sample.Etl.Contracts"));
                 Assert.That(
                     hydratedTypes,
                     Is.EquivalentTo(payloadNodes.Select(node => node.PayloadType)));

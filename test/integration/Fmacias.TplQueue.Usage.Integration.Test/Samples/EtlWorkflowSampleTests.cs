@@ -3,7 +3,7 @@ using Fmacias.TplQueue.Core;
 using global::Fmacias.TplQueue;
 using Microsoft.Extensions.DependencyInjection;
 using System.Reflection;
-using TplQueue.Sample.Etl.Composition;
+using TplQueue.Sample.Simulation.Composition;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Etl.Contracts.Dto;
 

@@ -88,7 +88,7 @@ The default local preview line is controlled by `TplQueuePackageVersion` in [Dir
 
 - the projects consume published packages instead of private `TplQueue.Core` source projects
 - temporary exception: while `TPLQ-V1-015A` advances the package version, the
-  `TplQueue.Sample.BlazorSignalR` host and its `TplQueue.Sample.Etl` module use source project
+  `TplQueue.Sample.BlazorSignalR` host and its `TplQueue.Sample.Simulation` module use source project
   references to the sibling Adapter and Core repositories; this is a deliberate
   upgrade workflow, not the published consumer model
 - when loaded through `WorkspaceTplQueue.sln`, workspace targets also switch the

@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace TplQueue.Sample.Etl.Runtime
+namespace TplQueue.Sample.Simulation.Runtime
 {
     /// <summary>
     /// Holds only the business data passed between steps of an ETL execution.

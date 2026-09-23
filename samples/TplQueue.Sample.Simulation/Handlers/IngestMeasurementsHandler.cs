@@ -4,10 +4,10 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TplQueue.Sample.Etl.Contracts;
-using TplQueue.Sample.Etl.Payloads;
-using TplQueue.Sample.Etl.Runtime;
+using TplQueue.Sample.Simulation.Payloads;
+using TplQueue.Sample.Simulation.Runtime;
 
-namespace TplQueue.Sample.Etl.Handlers
+namespace TplQueue.Sample.Simulation.Handlers
 {
     internal sealed class IngestMeasurementsHandler : EtlPayloadHandler<IngestMeasurementsPayload>
     {

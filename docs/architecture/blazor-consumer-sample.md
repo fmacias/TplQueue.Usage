@@ -7,6 +7,13 @@ under [tools/TplQueue.JobMonitor](../../tools/TplQueue.JobMonitor/README.md).
 
 ## Current host and ownership
 
+The implementation project and namespaces are `TplQueue.Sample.Simulation`
+(formerly `TplQueue.Sample.Etl`). The contracts project and namespaces remain
+`TplQueue.Sample.Etl.Contracts`; `IEtlWorkflow` and `AddSampleEtlWorkflow` retain
+their names. Existing consumers of implementation namespaces must rebuild with
+the new references. Cache payload type names follow the renamed assembly and
+namespace; the sample uses process-local memory, with no persisted cache migration.
+
 The sample is a passive .NET 8 Interactive Server application. C# owns queue
 configuration, payloads, handlers, retries, graph topology and materialized state.
 The hosted service attaches observers before submitting two three-job ETL roots

@@ -4,10 +4,10 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using TplQueue.Sample.Etl.Payloads;
-using TplQueue.Sample.Etl.Runtime;
+using TplQueue.Sample.Simulation.Payloads;
+using TplQueue.Sample.Simulation.Runtime;
 
-namespace TplQueue.Sample.Etl.Handlers
+namespace TplQueue.Sample.Simulation.Handlers
 {
     internal sealed class TransformMeasurementsHandler : EtlPayloadHandler<TransformMeasurementsPayload>
     {

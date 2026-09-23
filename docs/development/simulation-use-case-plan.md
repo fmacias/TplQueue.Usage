@@ -1,6 +1,6 @@
 # Simulation use-case implementation plan
 
-Created: 2026-09-22. Status: planning only; no implementation completed by this document.
+Created: 2026-09-22. Status: P00 and P01 complete; remaining tasks pending.
 
 ## Purpose and ownership
 
@@ -9,10 +9,9 @@ exercises real TplQueue execution and the Blazor job monitor. Implement and vali
 one bounded use case at a time, with a reviewable commit and a recorded checkpoint
 before the next iteration.
 
-The implementation belongs in `samples/TplQueue.Sample.Etl`, intended to become
-`TplQueue.Sample.Simulation`. Add contracts to `samples/TplQueue.Sample.Etl.Contracts`
-when required. Renaming the implementation is a future step, not part of this
-documentation change. Renaming the contracts project has not been decided.
+The implementation belongs in `samples/TplQueue.Sample.Simulation`, renamed from
+`TplQueue.Sample.Etl` in P01. Add contracts to `samples/TplQueue.Sample.Etl.Contracts`
+when required. Renaming the contracts project has not been decided.
 
 Blazor owns host composition, observer projection and presentation. The simulation
 owns scenarios, graph construction, handlers, delivery scheduling and run control.
@@ -52,9 +51,9 @@ remain unchanged.
 Relevant maintained sources:
 
 - [Hosted workload](../../samples/TplQueue.Sample.BlazorSignalR/Application/SampleEtlDemoHostedService.cs)
-- [ETL workflow](../../samples/TplQueue.Sample.Etl/EtlWorkflow.cs)
+- [ETL workflow](../../samples/TplQueue.Sample.Simulation/EtlWorkflow.cs)
 - [Workflow contract](../../samples/TplQueue.Sample.Etl.Contracts/IEtlWorkflow.cs)
-- [Queue runtime](../../samples/TplQueue.Sample.Etl/Runtime/EtlQueueRuntime.cs)
+- [Queue runtime](../../samples/TplQueue.Sample.Simulation/Runtime/EtlQueueRuntime.cs)
 - [Projection](../../samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/EtlExecutionProjectionStore.cs)
 - [Monitor behavior and bounds](../../tools/TplQueue.JobMonitor/README.md)
 
@@ -77,7 +76,7 @@ deferred until their dependent task; do not treat them as accepted defaults.
 | Burst delivery | Five small roots every 10 seconds | Deferred to UC19; preset to validate |
 | Shared-root representation | Preserve one job identity and all dependency edges; decide how run/root memberships are exposed | Resolve before UC12 |
 | Continuous retention | Bound completed history and event fingerprints while retaining active graphs and their dependencies | Resolve before UC25 |
-| Project rename | Implementation becomes `TplQueue.Sample.Simulation`; contracts name remains unchanged until decided | Future preparation step |
+| Project rename | Implementation becomes `TplQueue.Sample.Simulation`; contracts name remains unchanged until decided | Complete, 2026-09-24 (P01) |
 
 See the [P00 execution record](simulation-tasks/p00-record-decisions-and-establish-baseline.md#execution-record)
 for reference modes, retained tests, exact validation results and baseline limitations.
@@ -249,12 +248,12 @@ rewrite them to match the actual completed change.
 ### Preparation checkpoints
 
 - [x] [P00 - Record decisions and establish baseline](simulation-tasks/p00-record-decisions-and-establish-baseline.md)
-- [ ] [P01 - Isolate the module rename](simulation-tasks/p01-isolate-the-module-rename.md)
+- [x] [P01 - Isolate the module rename](simulation-tasks/p01-isolate-the-module-rename.md)
 - [ ] [P02 - Add finite timer-driven delivery and minimal contracts](simulation-tasks/p02-add-finite-timer-driven-delivery-and-minimal-contracts.md)
 - [ ] [P03 - Establish graph identity for all outcomes](simulation-tasks/p03-establish-graph-identity-for-all-outcomes.md)
 
-P00 precedes size-dependent defaults. P01 is an isolated future rename checkpoint;
-scenario development can still use the current project name if it is deferred.
+P00 precedes size-dependent defaults. P01 completed the isolated implementation
+rename to `TplQueue.Sample.Simulation`; the contracts name remains unchanged.
 P02 enables recurring finite scenarios. P03 gates claims about complete graph
 identification, but does not require implementing every presentation feature upfront.
 

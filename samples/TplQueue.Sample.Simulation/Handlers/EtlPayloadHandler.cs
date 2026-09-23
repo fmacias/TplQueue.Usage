@@ -3,7 +3,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace TplQueue.Sample.Etl.Handlers
+namespace TplQueue.Sample.Simulation.Handlers
 {
     internal abstract class EtlPayloadHandler<TPayload> : IHandler
         where TPayload : class, IPayload

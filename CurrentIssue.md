@@ -1,5 +1,10 @@
 # Current Issue: Backend-Owned Passive Observable ETL Sample
 
+> Historical implementation record. Project names and validation counts below
+> describe the original ETL iteration. The implementation is now
+> `TplQueue.Sample.Simulation`; see the maintained
+> [architecture guide](docs/architecture/blazor-consumer-sample.md).
+
 ## Status
 
 Implementation complete and validated with backend-owned `IParallelQ`, `IFifoQ`,

@@ -1,10 +1,10 @@
 using Fmacias.TplQueue.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using System;
-using TplQueue.Sample.Etl.Handlers;
-using TplQueue.Sample.Etl.Payloads;
+using TplQueue.Sample.Simulation.Handlers;
+using TplQueue.Sample.Simulation.Payloads;
 
-namespace TplQueue.Sample.Etl.Composition
+namespace TplQueue.Sample.Simulation.Composition
 {
     /// <summary>Initializes the fixed, backend-owned sample ETL workflow.</summary>
     public static class SampleEtlServiceProviderExtensions

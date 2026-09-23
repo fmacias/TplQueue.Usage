@@ -15,7 +15,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TplQueue.Sample.BlazorSigna
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TplQueue.Sample.Etl.Contracts", "samples\TplQueue.Sample.Etl.Contracts\TplQueue.Sample.Etl.Contracts.csproj", "{E6718719-384B-4518-A430-814C0FD9B048}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TplQueue.Sample.Etl", "samples\TplQueue.Sample.Etl\TplQueue.Sample.Etl.csproj", "{43843F17-5FDB-46EA-8D11-47BCE52079F6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TplQueue.Sample.Simulation", "samples\TplQueue.Sample.Simulation\TplQueue.Sample.Simulation.csproj", "{43843F17-5FDB-46EA-8D11-47BCE52079F6}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fmacias.TplQueue.Usage.Integration.Test", "test\integration\Fmacias.TplQueue.Usage.Integration.Test\Fmacias.TplQueue.Usage.Integration.Test.csproj", "{0B860717-E895-74CA-4F8C-A7583B029CE1}"
 EndProject

@@ -5,10 +5,10 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using System;
 using TplQueue.Sample.Etl.Contracts;
-using TplQueue.Sample.Etl.Handlers;
-using TplQueue.Sample.Etl.Runtime;
+using TplQueue.Sample.Simulation.Handlers;
+using TplQueue.Sample.Simulation.Runtime;
 
-namespace TplQueue.Sample.Etl.Composition
+namespace TplQueue.Sample.Simulation.Composition
 {
     /// <summary>Registers the fixed, backend-owned sample ETL workflow.</summary>
     public static class SampleEtlServiceCollectionExtensions
