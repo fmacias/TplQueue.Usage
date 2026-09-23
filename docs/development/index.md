@@ -5,7 +5,7 @@ This section groups local-development guidance for `TplQueue.Usage`.
 ## Local development
 
 - [Local development](local-development.md)
-- [Simulation use-case implementation plan and iteration checklist](simulation-use-case-plan.md)
+- [Simulation implementation plan and individual task checklist](simulation-use-case-plan.md#task-checklist)
 
 ## Typical workflow
 

@@ -18,7 +18,7 @@ Blazor owns host composition, observer projection and presentation. The simulati
 owns scenarios, graph construction, handlers, delivery scheduling and run control.
 Browser connections must not create or restart workloads.
 
-This document tracks proposed work and its acceptance evidence. The maintained
+This plan and its linked task files track proposed work and acceptance evidence. The maintained
 [Blazor architecture guide](../architecture/blazor-consumer-sample.md) remains the
 source for current architecture, contract ownership and rendering rules. Update that
 guide when implemented behavior changes; do not treat this plan as a second current
@@ -162,15 +162,15 @@ If dependencies or acceptance checks block completion, keep the main checkbox
 unchecked and record the task as blocked or in progress with the exact remaining
 work. A continuation thread resumes that same task before moving to dependent work.
 
-For each preparation step or use case:
+For the selected preparation task or use case:
 
 1. Read applicable root instructions and relevant surface documentation. Inspect
    repository status, active project references, configuration and existing tests.
    Record dependencies and any contradiction before expanding scope. The Usage
    source-reference preview exception remains intentional.
-2. Select one item below. Specify its observable outcome, settings, graph shape,
-   expected root/job counts and failure/cancellation semantics. Resolve only the
-   pending decisions that block that item.
+2. Select one task from the checklist below. Specify its observable outcome,
+   settings, graph shape, expected root/job counts and failure/cancellation
+   semantics. Resolve only the pending decisions that block that item.
 3. Add or adapt focused tests and demonstrate the failing condition. Prefer
    controllable synchronization over sleeps for concurrency assertions. Test
    scenario decisions independently of real timers, then include bounded real-timer
@@ -183,16 +183,23 @@ For each preparation step or use case:
    then integration tests that depend on those outputs. Run browser acceptance for
    rendering/lifecycle changes. Record exact commands, results and skipped checks.
 6. Update current-behavior documentation when behavior changes and add the iteration
-   record below. Stage only the intended files, then inspect `git diff --cached`
-   and perform the staged review required by repository instructions. Verify
-   compatibility configuration first. Fix findings and repeat affected checks.
-7. Commit the validated use case as a bounded change with a human-readable subject.
-   Include tests and relevant documentation. Do not include unrelated changes.
+   record in that task file. After acceptance passes, set its status to complete
+   and check its entry in this plan. Stage these records with the intended task
+   changes, then inspect
+   `git diff --cached` and perform the staged review required by repository
+   instructions. Verify compatibility configuration first. Fix findings and
+   repeat affected checks.
+7. Create the task's local commit(s) with human-readable subjects. Include tests,
+   relevant documentation, the task record and the main-plan completion checkbox.
+   Verify the commits succeeded and intended changes are committed before reporting
+   completion. Do not include unrelated changes or push commits.
    If dependent repository changes become necessary, first apply the scope and
    cross-repository documentation rules; do not silently expand the iteration.
-8. Record the resulting commit hash in the next checkpoint/documentation update
-   (a commit cannot contain its own final hash). Mark the item complete only when
-   its acceptance checks pass; keep partial or blocked items explicitly pending.
+8. End the thread with the completed task ID, commit hashes, validation results,
+   limitations and the next eligible task's path and ready-to-paste prompt. Do not
+   begin that task. Record final commit hashes in the next checkpoint/documentation
+   update (a commit cannot contain its own final hash); Git history and the final
+   handoff identify the commits until then. Keep partial or blocked items unchecked.
 
 A saved plan, passing build, or HTTP prerender check alone does not complete a
 use case. Do not claim checks that were not run. A blocking dependency is recorded
@@ -225,258 +232,59 @@ For changed monitor behavior, from `tools/TplQueue.JobMonitor`, run
 harness for the relevant interactive checks. Test live execution, selection, search,
 zoom, history, reconnect and disposal only to the extent affected by the iteration.
 
-## Preparation checkpoints
+## Task checklist
 
-- [x] **[P00 - Record decisions and establish baseline](simulation-tasks/p00-record-decisions-and-establish-baseline.md).** Confirm normal graph limits,
-  run current relevant checks, record reference mode and existing failures. Identify
-  the integration tests to retain. Suggested commit, if decisions change this file:
-  `docs(simulation): agree initial scenario limits and validation baseline`.
-- [ ] **P01 - Isolate the module rename.** When implementing the intended rename,
-  update project/namespace references, solutions, scripts, test links and affected
-  documentation together. Preserve behavior and verify old references deliberately
-  retained for history. Inventory workspace consumers before touching them; apply
-  their instructions if they are affected. Do not infer a contracts-project rename.
-  Suggested commit: `refactor(samples): rename ETL implementation to simulation`.
-- [ ] **P02 - Add finite timer-driven delivery and minimal contracts.** Move scenario
-  orchestration into the module, retain observer attachment before first submission,
-  and keep the host as lifecycle adapter. Verify finite tick counts, validation,
-  overlap protection, exception observation and no accepted submissions after stop.
-  Suggested commit: `feat(simulation): add bounded timer-driven scenario delivery`.
-- [ ] **P03 - Establish graph identity for all outcomes.** Determine the smallest
-  reliable path for run/root identity before terminal success, preserving real
-  event-owned lifecycle facts. Test running, failed and cancelled graph selection.
-  Resolve shared membership before UC12 without inventing execution channels.
-  Suggested commit: `fix(monitor): preserve simulation graph identity across outcomes`.
+The plan is split into 29 task files: four preparation tasks and 25 use cases.
+Start with [P00 - Record decisions and establish baseline](simulation-tasks/p00-record-decisions-and-establish-baseline.md).
+Each file contains its scope, dependencies, acceptance requirements, suggested
+commit and space for execution evidence. The shared rules and decision table stay
+in this plan; task files own the detailed acceptance and execution records.
+
+Work on one task per thread. The IDs preserve the original plan order; use each
+task's dependencies to choose the next eligible item. For tasks with several
+variants, validate one bounded variant at a time and keep the task pending until
+all its acceptance requirements pass. Suggested commit subjects identify scope;
+rewrite them to match the actual completed change.
+
+### Preparation checkpoints
+
+- [x] [P00 - Record decisions and establish baseline](simulation-tasks/p00-record-decisions-and-establish-baseline.md)
+- [ ] [P01 - Isolate the module rename](simulation-tasks/p01-isolate-the-module-rename.md)
+- [ ] [P02 - Add finite timer-driven delivery and minimal contracts](simulation-tasks/p02-add-finite-timer-driven-delivery-and-minimal-contracts.md)
+- [ ] [P03 - Establish graph identity for all outcomes](simulation-tasks/p03-establish-graph-identity-for-all-outcomes.md)
 
 P00 precedes size-dependent defaults. P01 is an isolated future rename checkpoint;
 scenario development can still use the current project name if it is deferred.
 P02 enables recurring finite scenarios. P03 gates claims about complete graph
 identification, but does not require implementing every presentation feature upfront.
 
-## Use-case checklist and acceptance
+### Use-case checklist and acceptance
 
-Each item follows the iteration workflow above. Suggested commit subjects identify
-scope; rewrite them to match the actual completed change.
-
-### UC01 - Single job on each queue
-
-- [ ] Implement and validate. Submit one independent root separately to FIFO,
-  Parallel and Cache. Verify one execution per job and the expected terminal outcome.
-- Check enqueue history in Unassigned, actual channel/start placement, and one job
-  count despite two position markers. Inspect channel reuse after completion.
-- Commit: `feat(simulation): add single-job queue scenarios`.
-
-### UC02 - Sequential ETL chain
-
-- [ ] Implement and validate. Preserve the three-step ETL example as a named scenario
-  and deliver a finite number of fresh roots at a configured interval.
-- Verify prerequisite completion before downstream handler execution, correct
-  business output, three unique jobs per root and actual dependency edges.
-- Commit: `feat(simulation): schedule the sequential ETL scenario`.
-
-### UC03 - Multiple FIFO roots
-
-- [ ] Implement and validate after UC02. Submit a controlled sequence faster than
-  completion, using known submission order and readable job durations.
-- Verify FIFO behavior against the queue contract, serialized handler execution,
-  channel zero, backlog visibility and eventual drain. Do not infer ordering of
-  asynchronous observer callbacks from scheduling order.
-- Commit: `feat(simulation): demonstrate FIFO backlog and ordering`.
-
-### UC04 - Multiple parallel roots
-
-- [ ] Implement and validate after UC02. Submit enough independent roots to exercise
-  configured queue capacity and queue additional work.
-- Verify concurrent execution, channels within capacity, no conflicting ownership
-  of a channel, reuse after completion and separation of unrelated roots.
-- Commit: `feat(simulation): demonstrate parallel capacity and channel reuse`.
-
-### UC05 - Cache-backed ETL
-
-- [ ] Implement and validate after UC02. Exercise real payload serialization,
-  resolution and handlers through CacheQ, retaining readable ETL output.
-- Verify successful execution and cache acknowledgment separately; a root wait does
-  not prove observer delivery or acknowledgment finished. Add failure/cancellation
-  variants alongside UC16/UC17. Do not claim persistence across process restart.
-- Commit: `feat(simulation): cover cache-backed ETL execution`.
-
-### UC06 - Branching and joining
-
-- [ ] Implement and validate. Build 2-4 independent prerequisite branches converging
-  on a final root; initially keep the graph within 5-10 unique jobs.
-- Verify every required branch completes before the join handler executes, distinct
-  dependency edges and root highlighting. Separate graph topology from actual
-  parallelism, which remains governed by the selected queue.
-- Commit: `feat(simulation): add branching and joining graphs`.
-
-### UC07 - Diamond graph
-
-- [ ] Implement and validate after UC06. Share one prerequisite between two branches
-  and join those branches at the root.
-- Verify the shared job executes once, has one identity and renders all dependency
-  edges. Count unique nodes rather than traversed references.
-- Commit: `feat(simulation): add a shared-dependency diamond graph`.
-
-### UC08 - Uneven branches
-
-- [ ] Implement and validate after UC06. Give one branch a longer controlled duration.
-- Verify finished branches stay finished, the join waits for the slow prerequisite,
-  and handler start order is correct. Channel occupancy may include dependency
-  waiting; do not equate a channel-bearing Started event with handler CPU activity.
-- Commit: `feat(simulation): demonstrate slow-branch joins`.
-
-### UC09 - Independent workloads across queues
-
-- [ ] Implement and validate after UC01-UC05. Enable finite scenario schedules with
-  different intervals and initial offsets, initially 2/3/5 seconds.
-- Verify independent delivery counts, unique run identities, correctly separated
-  root graphs, and no new workloads when another browser connects.
-- Commit: `feat(simulation): schedule independent queue workloads`.
-
-### UC10 - Two-queue shared dependency
-
-- [ ] Implement and validate after UC07. Compose graphs sharing a job instance and
-  submit in a controlled order so its actual execution owner is known.
-- Verify execution once on the owning queue, waiting on the other queue, no duplicate
-  enqueue event from a rejected ownership claim, and a real cross-queue edge.
-  Recheck construction/root-binding constraints before selecting the exact topology.
-- Commit: `feat(simulation): add two-queue dependency scenarios`.
-
-### UC11 - Three-queue dependency graph
-
-- [ ] Implement and validate after UC10 and UC05. Extend the graph across FIFO,
-  Parallel and Cache using supported shared-dependency composition.
-- Verify queue ownership and prerequisite order at each boundary, real channels,
-  distinct roots where required, and CacheQ hydration preserves supported identities.
-  Record any unsupported cache-sharing composition as a dependency limitation.
-- Commit: `feat(simulation): cover dependencies across three queues`.
-
-### UC12 - One prerequisite shared by several roots
-
-- [ ] Implement and validate after UC10 and the P03 membership decision. Give several
-  roots the same prerequisite instance and distinct run/root membership information.
-- Verify a single execution/node, all consumer edges and stable selection before
-  and after completion. Completion order must not silently overwrite membership.
-- Commit: `feat(simulation): cover dependencies shared by multiple roots`.
-
-### UC13 - Cross-queue ownership variants
-
-- [ ] Implement and validate after UC10. Reverse enqueue order, then add a bounded
-  concurrent-submission variant.
-- Verify the controlled-order winner and, for the race, exactly one actual owner
-  without assuming which queue wins. Render the observed owner and execute once.
-- Commit: `feat(simulation): exercise cross-queue ownership ordering`.
-
-### UC14 - Cross-queue bottleneck
-
-- [ ] Implement and validate after UC10. Delay an externally owned prerequisite
-  while several consumers wait under bounded queue capacities.
-- Verify consumers do not bypass the prerequisite, unrelated work follows runtime
-  capacity rules, and all consumers progress once the bottleneck clears. Use a
-  bounded timeout to detect stalls; do not build accidental cyclic waits.
-- Commit: `feat(simulation): demonstrate cross-queue bottlenecks`.
-
-### UC15 - Transient failure followed by success
-
-- [ ] Implement and validate. Fail selected jobs for a configured number of attempts,
-  then succeed under the existing retry abstraction.
-- Verify attempt counts, configured delay policy and eventual completion on the
-  same job identity. Verify no duplicate downstream execution or business output.
-  Inspect retry metadata without requiring every brief transition to be painted.
-- Commit: `feat(simulation): add deterministic retry recovery scenarios`.
-
-### UC16 - Retry exhaustion and dependency failure
-
-- [ ] Implement and validate after UC15. Fail a leaf, an intermediate job and the
-  root in separate variants; include CacheQ where supported.
-- Verify policy exhaustion, actual terminal outcomes and that dependent handlers
-  do not run incorrectly. Determine root/branch propagation from runtime contracts
-  and tests, then document it. Render failed graphs with identifiable roots.
-- Commit: `feat(simulation): cover exhausted retries and dependency failures`.
-
-### UC17 - Cancellation at different phases
-
-- [ ] Implement and validate. Cancel queued, executing, dependency-waiting and
-  retry-waiting runs; the latter variants depend on UC14/UC15.
-- Trigger cancellation from observed milestones or controlled handler gates, rather
-  than guessed sleep durations. Verify terminal behavior, resource cleanup and
-  isolation of unrelated runs. Include repeated/unknown-root cancellation.
-- Commit: `feat(simulation): cover cancellation across execution phases`.
-
-### UC18 - Shared-dependency failure or cancellation
-
-- [ ] Implement and validate after UC12, UC16 and UC17. Fail/cancel the shared
-  prerequisite and separately cancel one consuming root.
-- Establish supported cancellation ownership first: cancelling one consumer must
-  not be assumed to cancel shared work. Verify each consumer's actual outcome,
-  unrelated-root isolation, single job identity and absence of hangs.
-- Commit: `feat(simulation): cover shared-dependency failure and cancellation`.
-
-### UC19 - Burst, overload and recovery
-
-- [ ] Implement and validate after UC03/UC04 and P02 bounds. Submit finite bursts,
-  then finite arrivals faster than service, and finally stop arrivals to drain.
-- Verify admission bounds, skipped-tick counts, visible backlog growth and recovery.
-  Distinguish skipped submissions from accepted jobs. Do not enable unbounded load.
-- Commit: `feat(simulation): add bounded burst and overload scenarios`.
-
-### UC20 - Large shallow and deep narrow graphs
-
-- [ ] Implement and validate after graph-size agreement, UC06/UC07 and P03. Build
-  each shape separately, including the normal cap and an opt-in stress profile.
-- Verify unique-node counts, depth validation and useful validation errors. Check
-  graph focus, search and grouped markers without fabricating edges or timestamps.
-  Record browser/environment, snapshot size and update timings; report measured
-  limits rather than claiming the stress profile is universally responsive.
-- Commit: `feat(simulation): add bounded graph-size scenarios`.
-
-### UC21 - Very short jobs and clustered starts
-
-- [ ] Implement and validate after UC04. Deliver a bounded set of very short jobs.
-- Verify grouping, count accuracy, individual selection, zoom and retained enqueue
-  history. Use deterministic monitor fixtures for exact timestamp collisions;
-  real timers do not guarantee same-millisecond timestamps. Never shift timestamps
-  simply to separate markers.
-- Commit: `feat(simulation): exercise dense job timing and inspection`.
-
-### UC22 - Long execution and idle periods
-
-- [ ] Implement and validate. Alternate finite long-running work and arrival gaps.
-- Verify the monitor refreshes on accepted events, stays still without changes,
-  and resumes on new events. Check Pause/history reference stability during incoming
-  updates and Follow live behavior without introducing periodic redraws.
-- Commit: `feat(simulation): demonstrate long-running and idle intervals`.
-
-### UC23 - Simulation lifecycle
-
-- [ ] Implement and validate after P02 and UC17. Exercise start, pause-arrivals,
-  resume, finite completion, drain, cancellation and host shutdown.
-- Verify idempotent lifecycle operations, documented restart semantics, no duplicate
-  schedules, no post-stop accepted submissions, observed callback failures and
-  disposed timers/subscriptions/cancellation resources. Keep view pause separate.
-- Commit: `feat(simulation): complete lifecycle and shutdown scenarios`.
-
-### UC24 - Browser lifecycle during execution
-
-- [ ] Implement and validate after UC09/UC23. Connect late, reconnect, navigate
-  away/back and use multiple viewers during the same backend run.
-- Verify shared backend execution with independent selection/viewports, initial
-  snapshot plus event-driven updates, no extra submissions and safe subscription/
-  interop disposal. Run the interactive Blazor harness; HTTP checks are insufficient.
-- Commit: `test(simulation): cover browser lifecycle during active workloads`.
-
-### UC25 - Bounded continuous operation
-
-- [ ] Implement and validate after UC12, UC19 and UC23 plus the retention decision.
-  Bound active runs, completed history, event fingerprints and sample business data.
-- Retain active graphs and shared dependencies while any active consumer needs them.
-  Evict completed graph history coherently, handle selection of retired jobs, and
-  prevent late/duplicate events from recreating unbounded expired history. Define
-  the bounded late-event policy explicitly.
-- Run beyond several retention cycles and verify retained counts and memory trends
-  stabilize, active graphs remain intact and shutdown cleans up. Record duration,
-  throughput and environment. Only then enable optional continuous operation.
-- Commit: `feat(simulation): bound continuous workload history and retention`.
+- [ ] [UC01 - Single job on each queue](simulation-tasks/uc01-single-job-on-each-queue.md)
+- [ ] [UC02 - Sequential ETL chain](simulation-tasks/uc02-sequential-etl-chain.md)
+- [ ] [UC03 - Multiple FIFO roots](simulation-tasks/uc03-multiple-fifo-roots.md)
+- [ ] [UC04 - Multiple parallel roots](simulation-tasks/uc04-multiple-parallel-roots.md)
+- [ ] [UC05 - Cache-backed ETL](simulation-tasks/uc05-cache-backed-etl.md)
+- [ ] [UC06 - Branching and joining](simulation-tasks/uc06-branching-and-joining.md)
+- [ ] [UC07 - Diamond graph](simulation-tasks/uc07-diamond-graph.md)
+- [ ] [UC08 - Uneven branches](simulation-tasks/uc08-uneven-branches.md)
+- [ ] [UC09 - Independent workloads across queues](simulation-tasks/uc09-independent-workloads-across-queues.md)
+- [ ] [UC10 - Two-queue shared dependency](simulation-tasks/uc10-two-queue-shared-dependency.md)
+- [ ] [UC11 - Three-queue dependency graph](simulation-tasks/uc11-three-queue-dependency-graph.md)
+- [ ] [UC12 - One prerequisite shared by several roots](simulation-tasks/uc12-one-prerequisite-shared-by-several-roots.md)
+- [ ] [UC13 - Cross-queue ownership variants](simulation-tasks/uc13-cross-queue-ownership-variants.md)
+- [ ] [UC14 - Cross-queue bottleneck](simulation-tasks/uc14-cross-queue-bottleneck.md)
+- [ ] [UC15 - Transient failure followed by success](simulation-tasks/uc15-transient-failure-followed-by-success.md)
+- [ ] [UC16 - Retry exhaustion and dependency failure](simulation-tasks/uc16-retry-exhaustion-and-dependency-failure.md)
+- [ ] [UC17 - Cancellation at different phases](simulation-tasks/uc17-cancellation-at-different-phases.md)
+- [ ] [UC18 - Shared-dependency failure or cancellation](simulation-tasks/uc18-shared-dependency-failure-or-cancellation.md)
+- [ ] [UC19 - Burst, overload and recovery](simulation-tasks/uc19-burst-overload-and-recovery.md)
+- [ ] [UC20 - Large shallow and deep narrow graphs](simulation-tasks/uc20-large-shallow-and-deep-narrow-graphs.md)
+- [ ] [UC21 - Very short jobs and clustered starts](simulation-tasks/uc21-very-short-jobs-and-clustered-starts.md)
+- [ ] [UC22 - Long execution and idle periods](simulation-tasks/uc22-long-execution-and-idle-periods.md)
+- [ ] [UC23 - Simulation lifecycle](simulation-tasks/uc23-simulation-lifecycle.md)
+- [ ] [UC24 - Browser lifecycle during execution](simulation-tasks/uc24-browser-lifecycle-during-execution.md)
+- [ ] [UC25 - Bounded continuous operation](simulation-tasks/uc25-bounded-continuous-operation.md)
 
 ## Additional automated coverage
 
@@ -496,8 +304,10 @@ than making misleading runtime demonstrations or expanding unrelated tests:
 
 ## Iteration record
 
-Copy this template for every implemented item. Keep the checklist and records in
-this document so the next session can resume without reconstructing the conversation.
+Copy this template into the selected task file when work starts. Keep the summary
+checklist in this plan and detailed records in the task files so the next session
+can resume without reconstructing the conversation. Record shared decisions in
+this plan's decision table and link to the task evidence.
 
 ```text
 Item: Pxx / UCxx - title
@@ -516,6 +326,7 @@ Remaining limitations or dependency blockers:
 Commit subject:
 Commit hash: record in the next checkpoint update
 Next eligible item:
+Next task file and new-thread prompt:
 ```
 
 ### Initial checkpoint - 2026-09-22
@@ -529,3 +340,17 @@ Next eligible item:
   inspected. Runtime tests were not run for this documentation-only checkpoint.
 - Next eligible work: P00 decisions/baseline, followed by the agreed preparation
   checkpoint and one finite scenario. This plan does not mark future work complete.
+
+### Task split checkpoint - 2026-09-23
+
+- Split P00-P03 and UC01-UC25 into 29 linked task files, preserving their scope,
+  acceptance requirements and suggested commits.
+- P00 remains the first task. All implementation tasks and proposed decisions
+  remain pending; splitting the plan does not establish or validate the baseline.
+- Shared rules, the decision table and the summary checklist remain in this plan.
+  Detailed acceptance and future execution evidence belong in the task files.
+- Documentation validation passed: all 29 original task scopes, acceptance
+  requirements and commit subjects are preserved; 381 local links and their
+  anchors resolve. Whitespace checks covered all 32 affected documentation files,
+  and `git diff --check` passed. Runtime tests were not run for this documentation
+  split; baseline execution remains part of P00.
