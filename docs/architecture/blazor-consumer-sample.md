@@ -64,8 +64,44 @@ still freezes only viewing time. Restart, explicit drain/cancel controls and
 continuous retention are deferred to their later tasks.
 
 Contracts remain in `TplQueue.Sample.Etl.Contracts`; timer types and live jobs
-stay internal. Delivery snapshots expose scenario IDs and accepted root IDs, but
-do not add running/failed/cancelled graph membership to the monitor (P03).
+stay internal. Delivery snapshots expose scenario IDs and accepted root IDs.
+The separate graph catalog supplies composition membership for all outcomes.
+
+### Simulation graph identity
+
+`ISimulationGraphCatalog` exposes detached root ID lists by job ID. The module
+captures all reachable job IDs before enqueue can publish observations, hydrate
+cache objects or add FIFO ordering edges. Each composed root ID identifies one
+run in the current one-root-per-run model; no second run GUID is necessary.
+The catalog retains IDs only, uses a lock for atomic registration and reads, and
+survives terminal outcomes for the finite host lifetime. It does not assign queues,
+channels, timestamps, status or scenario execution facts. Membership remains on
+submission exceptions because a queue may already have published events; it is
+not proof that enqueue succeeded. Admission and accepted-root counters retain
+their separate P02 meaning.
+
+The projection joins event-observed jobs to that catalog when making a detached
+snapshot. It creates no jobs, enqueue timestamps or lifecycle events from catalog
+membership. A job without its own observation remains absent; explicit dependency
+IDs can therefore refer to unresolved endpoints. Missing observations are not
+invented. Cache hydration retains the same IDs. Registered root success never
+backfills or overwrites another job's lifecycle or membership.
+
+`rootJobIds` contains every known composed root membership, sorted and detached.
+Shared prerequisites have one global job ID and several root IDs; each root counts
+that prerequisite once, while global job counts count it once. The legacy singular
+`rootJobId` is the sole root when unambiguous, the job's own ID when it is itself a
+root, and null for a shared non-root. `isRoot` is independent of terminal status.
+Producers without a catalog retain the existing success-based fallback; their
+early membership remains unknown. JavaScript accepts older singular-only producers
+and emits both fields in `job-select`. The Blazor callback still selects by job ID.
+
+Selection follows explicit dependency edges in both directions for all outcomes.
+Selecting a shared prerequisite or either connected root highlights the whole
+connected graph. FIFO ordering edges remain visible but do not merge composed run
+memberships. Root lists never choose execution channels or synthesize edges.
+Future multi-root scenario IDs and bounded continuous retention require their
+own acceptance tasks; this finite catalog is process-local and not restart-durable.
 
 ```text
 queue execution capacity and lifecycle snapshots
@@ -121,7 +157,7 @@ Queue MaxParallelism is read from the configured queue instances.
 ## Monitor contract and behavior
 
 `JobMonitorSnapshot` contains queue ID/name/capacity and individual job ID,
-root ID when known, name, description, channel, observation time, normalized
+all known root memberships (plus the compatible singular root), name, description, channel, observation time, normalized
 state, duration when known, explicit dependency IDs, bounded metadata and root flag.
 The runtime currently supplies no description; the mapper leaves it empty.
 Metadata includes observer event type, retry count and duration provenance.

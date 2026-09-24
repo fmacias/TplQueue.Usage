@@ -2,7 +2,10 @@ using System.Collections.ObjectModel;
 
 namespace TplQueue.Sample.BlazorSignalR.Presentation.Etl;
 
-/// <summary>Detached job state. ChannelStartedAt records a channel-bearing Started event only.</summary>
+/// <summary>
+/// Detached job state. ChannelStartedAt records a channel-bearing Started event only.
+/// RootJobIds contains all known composition memberships; the singular root is null for shared non-roots.
+/// </summary>
 internal sealed record EtlJobSnapshot(
     Guid JobId,
     Guid? RootJobId,
@@ -20,7 +23,8 @@ internal sealed record EtlJobSnapshot(
     string LastEventType,
     DateTimeOffset LastEventAt,
     int? ExecutionChannel = null,
-    DateTimeOffset? ChannelStartedAt = null);
+    DateTimeOffset? ChannelStartedAt = null,
+    IReadOnlyList<Guid>? RootJobIds = null);
 
 internal sealed record EtlQueueSnapshot(
     string GroupId,

@@ -20,6 +20,11 @@ positions select the same job; enqueue time also remains in metadata. Jobs missi
 event remain Unassigned until it arrives. Hover shows bounded metadata; there is
 no permanent details panel.
 
+Root membership is available from the first observation, including running,
+failed and cancelled graphs. Shared prerequisites retain one job ID and all root
+memberships. Selection emphasizes the connected dependency graph; root identity
+never supplies a channel or changes observed lifecycle facts.
+
 After the initial snapshot, new accepted `IJobEvent` observations trigger projection
 notifications and coalesced updates through the Blazor circuit. Duplicate events
 do not trigger another update. The standalone monitor has no refresh interval:

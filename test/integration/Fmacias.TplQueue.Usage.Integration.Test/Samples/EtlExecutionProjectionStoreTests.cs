@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.ObjectModel;
 using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
 using TplQueue.Sample.Etl.Contracts;
+using TplQueue.Sample.Simulation.Runtime;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples
 {
@@ -12,6 +13,71 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
         private static readonly Guid ParallelQueueId = Guid.Parse("10000000-0000-0000-0000-000000000001");
         private static readonly Guid FifoQueueId = Guid.Parse("10000000-0000-0000-0000-000000000002");
         private static readonly Guid CacheQueueId = Guid.Parse("10000000-0000-0000-0000-000000000003");
+
+        [TestCase(JobEventStatus.Running, "running")]
+        [TestCase(JobEventStatus.Failed, "failed")]
+        [TestCase(JobEventStatus.Canceled, "cancelled")]
+        public void RegisteredGraph_HasIdentityBeforeSuccess_WithoutInventingLifecycle(JobEventStatus outcome, string state)
+        {
+            // Arrange: the root has not emitted any event when its child first runs.
+            var catalog = new SimulationGraphCatalog();
+            var store = CreateStore(catalog);
+            var child = Job(Guid.NewGuid(), "child", ParallelQueueId);
+            var root = Job(Guid.NewGuid(), "root", ParallelQueueId, child);
+            catalog.Register(root);
+            var time = Utc(10, 15, 0);
+
+            // Act
+            store.Apply(Event(outcome, child, time));
+            var first = JobMonitorMapper.Map(store.GetSnapshot());
+            store.Apply(Event(outcome, root, time.AddSeconds(1)));
+            var snapshot = JobMonitorMapper.Map(store.GetSnapshot());
+
+            // Assert
+            Assert.That(first.Jobs, Has.Count.EqualTo(1), "Membership must not fabricate observations for other jobs.");
+            Assert.That(first.Jobs.Single().RootJobId, Is.EqualTo(root.Id.ToString()));
+            Assert.That(snapshot.Jobs.Select(j => j.RootJobIds), Is.All.EqualTo(new[] { root.Id.ToString() }));
+            Assert.That(snapshot.Jobs.Select(j => j.State), Is.All.EqualTo(state));
+            Assert.That(snapshot.Jobs.Select(j => j.Channel), Is.All.Null);
+            Assert.That(snapshot.Jobs.Select(j => j.EnqueuedAt), Is.All.Null);
+            Assert.That(snapshot.Jobs.Single(j => j.IsRoot).Id, Is.EqualTo(root.Id.ToString()));
+            Assert.That(snapshot.Jobs.Single(j => j.IsRoot).DependsOn, Is.EqualTo(new[] { child.Id.ToString() }));
+        }
+
+        [Test]
+        public void SharedGraph_PreservesAllMembershipsAndActualQueueAcrossLateRootEvents()
+        {
+            // Arrange
+            var catalog = new SimulationGraphCatalog();
+            var store = CreateStore(catalog);
+            var shared = Job(Guid.NewGuid(), "shared", ParallelQueueId);
+            var first = Job(Guid.NewGuid(), "first", FifoQueueId, shared);
+            var second = Job(Guid.NewGuid(), "second", CacheQueueId, shared);
+            catalog.Register(first);
+            store.Apply(new ChannelEvent(JobEventStatus.Started, shared, Utc(10, 15, 0), 2));
+            var before = JobMonitorMapper.Map(store.GetSnapshot());
+
+            // Act
+            catalog.Register(second);
+            store.Apply(Event(JobEventStatus.Canceled, second, Utc(10, 15, 3)));
+            store.Apply(Event(JobEventStatus.RootSuccessed, first, Utc(10, 15, 2)));
+            store.Apply(Event(JobEventStatus.Enqueued, first, Utc(10, 14, 59)));
+            var after = JobMonitorMapper.Map(store.GetSnapshot());
+            var job = after.Jobs.Single(j => j.Id == shared.Id.ToString());
+
+            // Assert
+            Assert.That(before.Jobs.Single().RootJobIds, Is.EqualTo(new[] { first.Id.ToString() }));
+            Assert.That(job.RootJobIds, Is.EquivalentTo(new[] { first.Id.ToString(), second.Id.ToString() }));
+            Assert.That(job.RootJobId, Is.Null, "A shared prerequisite has no single owning root.");
+            Assert.That(job.IsRoot, Is.False);
+            Assert.That(job.QueueId, Is.EqualTo("parallel"));
+            Assert.That(job.Channel, Is.EqualTo(2));
+            Assert.That(job.State, Is.EqualTo("running"));
+            Assert.That(job.ObservedAt, Is.EqualTo(Utc(10, 15, 0)));
+            Assert.That(after.Jobs, Has.Count.EqualTo(3));
+            Assert.That(after.Jobs.Where(j => j.IsRoot).SelectMany(j => j.DependsOn),
+                Is.EqualTo(new[] { shared.Id.ToString(), shared.Id.ToString() }));
+        }
 
         [Test]
         public void EnqueuedEvent_CreatesAnImmutableQueuedJobSnapshot()
@@ -642,7 +708,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 : base(status, info, time.UtcDateTime, 0, null) => ExecutionChannel = channel;
             public int? ExecutionChannel { get; }
         }
-        private static EtlExecutionProjectionStore CreateStore()
+        private static EtlExecutionProjectionStore CreateStore(ISimulationGraphCatalog? graphs = null)
         {
             var descriptors = new[]
             {
@@ -668,7 +734,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             var catalog = new EtlQueueCatalog(descriptors);
             return new EtlExecutionProjectionStore(
                 catalog,
-                NullLogger<EtlExecutionProjectionStore>.Instance);
+                NullLogger<EtlExecutionProjectionStore>.Instance, graphs);
         }
 
         private static FakeJobEvent Event(

@@ -10,6 +10,30 @@ const job = (id, channel, extra = {}) => ({ id, queueId: 'q', channel, name: id,
   observedAt: time, state: 'running', dependsOn: [], ...extra });
 const data = jobs => ({ queues: [{ id: 'q', name: 'Parallel', maxParallelism: 3 }], jobs });
 
+test('shared memberships are detached and graph focus preserves every dependency for all outcomes', () => {
+  for (const state of ['running', 'failed', 'cancelled']) {
+    const roots = ['first', 'second'];
+    const model = normalize(data([
+      job('shared', 2, { rootJobIds: roots, state }),
+      job('first', null, { rootJobIds: ['first'], isRoot: true, state, dependsOn: ['shared'] }),
+      job('second', 0, { rootJobIds: ['second'], isRoot: true, state, dependsOn: ['shared'] }),
+      job('unrelated', 1)
+    ]));
+    roots.push('later');
+    assert.deepEqual(model.jobs[0].rootJobIds, ['first', 'second']);
+    assert.ok(Object.isFrozen(model.jobs[0].rootJobIds));
+    assert.equal(model.jobs[0].rootJobId, null);
+    assert.equal(model.jobs[0].channel, 2);
+    for (const selected of ['shared', 'first', 'second'])
+      assert.deepEqual(connected(model, selected), new Set(['shared', 'first', 'second']));
+  }
+});
+test('membership accepts legacy singular IDs and rejects malformed lists', () => {
+  assert.deepEqual(normalize(data([job('a', null, { rootJobId: 'r' })])).jobs[0].rootJobIds, ['r']);
+  for (const rootJobIds of ['r', [null], ['']])
+    assert.throws(() => normalize(data([job('a', null, { rootJobIds })])), /rootJobIds|ID/);
+});
+
 test('explicit channels survive root grouping; null remains unassigned', () => {
   const model = normalize(data([job('a', 2, { rootJobId: 'r' }), job('b', null)]));
   assert.equal(model.jobs[0].channel, 2);

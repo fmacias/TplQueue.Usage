@@ -51,6 +51,10 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 Throws.TypeOf<InvalidOperationException>()
                     .With.Message.EqualTo("Simulated cache enqueue failure."));
             Assert.That(cacheQueueProxy.LastDataJobRoot, Is.Not.Null);
+            Assert.That(provider.GetRequiredService<ISimulationGraphCatalog>()
+                .GetRootJobIds(cacheQueueProxy.LastDataJobRoot!.Id),
+                Is.EqualTo(new[] { cacheQueueProxy.LastDataJobRoot.Id }),
+                "Composition identity remains available for events published before an enqueue exception.");
             Assert.That(
                 workflow.Cancel(cacheQueueProxy.LastDataJobRoot!.Id),
                 Is.False,

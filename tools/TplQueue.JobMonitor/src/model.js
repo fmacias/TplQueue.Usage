@@ -33,8 +33,10 @@ export function normalize(snapshot) {
     jobIds.add(jobId);
     const state = j.state === 'canceled' ? 'cancelled' : j.state === 'queued' ? 'waiting' : j.state;
     if (j.dependsOn !== undefined && !Array.isArray(j.dependsOn)) throw new TypeError('dependsOn must be an array');
+    if (j.rootJobIds != null && !Array.isArray(j.rootJobIds)) throw new TypeError('rootJobIds must be an array');
     return Object.freeze({ id: jobId, queueId: queue.id, queueName: queue.name, channel: j.channel,
       rootJobId: j.rootJobId == null ? null : id(j.rootJobId), name: text(j.name || jobId),
+      rootJobIds: Object.freeze([...new Set((j.rootJobIds ?? (j.rootJobId == null ? [] : [j.rootJobId])).map(id))]),
       description: text(j.description, 512), observedAt: j.observedAt, time: timestamp(j.observedAt),
       enqueuedAt: j.enqueuedAt ?? null, enqueuedTime: j.enqueuedAt == null ? null : timestamp(j.enqueuedAt),
       state: states.has(state) ? state : 'unknown', durationMs: Number.isFinite(j.durationMs) && j.durationMs >= 0 ? j.durationMs : null,

@@ -214,7 +214,9 @@ to 1..windowMs, giving a minimum one-millisecond interval. `followLive()` and
 Search matches name, ID and description. Selection traverses explicit dependencies
 in both directions, emphasizes the connected graph, and centers the selected job
 in the current interval. It does not widen the interval to fit the entire graph.
-`job-select` emits jobId and rootJobId without opening a permanent panel.
+`job-select` emits jobId, rootJobId and all rootJobIds without opening a permanent
+panel. Shared prerequisites keep one job identity and all memberships across
+running, failed and cancelled outcomes. Membership does not create edges or channels.
 
 Dependency connectors are straight segments trimmed to marker boundaries, including
 cross-queue edges. Grouped endpoints attach to count markers and mean membership;

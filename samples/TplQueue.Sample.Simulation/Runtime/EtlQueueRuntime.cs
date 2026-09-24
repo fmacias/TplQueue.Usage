@@ -15,6 +15,7 @@ namespace TplQueue.Sample.Simulation.Runtime
         private readonly IParallelQ _parallelQ;
         private readonly ICacheQ _cacheQ;
         private readonly ILogger<EtlQueueRuntime> _logger;
+        private readonly SimulationGraphCatalog _graphs;
         private readonly IReadOnlyList<IDisposable> _subscriptions;
         private readonly object _disposeSync = new object();
         private bool _disposed;
@@ -25,12 +26,14 @@ namespace TplQueue.Sample.Simulation.Runtime
             IFifoQ fifoQ,
             IParallelQ parallelQ,
             ICacheQ cacheQ,
-            ILogger<EtlQueueRuntime> logger)
+            ILogger<EtlQueueRuntime> logger,
+            SimulationGraphCatalog graphs)
         {
             _fifoQ = fifoQ ?? throw new ArgumentNullException(nameof(fifoQ));
             _parallelQ = parallelQ ?? throw new ArgumentNullException(nameof(parallelQ));
             _cacheQ = cacheQ ?? throw new ArgumentNullException(nameof(cacheQ));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+            _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
             _subscriptions = new[]
             {
                 _fifoQ.Subscribe(this),
@@ -43,9 +46,10 @@ namespace TplQueue.Sample.Simulation.Runtime
             IFifoQ fifoQ,
             IParallelQ parallelQ,
             ICacheQ cacheQ,
-            ILogger<EtlQueueRuntime> logger)
+            ILogger<EtlQueueRuntime> logger,
+            SimulationGraphCatalog graphs)
         {
-            var runtime = new EtlQueueRuntime(fifoQ, parallelQ, cacheQ, logger);
+            var runtime = new EtlQueueRuntime(fifoQ, parallelQ, cacheQ, logger, graphs);
 
             try
             {
@@ -73,6 +77,9 @@ namespace TplQueue.Sample.Simulation.Runtime
 
             try
             {
+                // Composition identity is available even to synchronous enqueue observers.
+                // Retain it on submission failure: a queue may already have published events.
+                _graphs.Register(root);
                 switch (availableQueue)
                 {
                     case AvailableQueue.FIFO:

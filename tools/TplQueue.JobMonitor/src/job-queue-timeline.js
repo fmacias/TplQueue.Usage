@@ -123,7 +123,8 @@ export class JobQueueTimeline extends HTMLElement {
     const viewport = this.shadowRoot.querySelector('.viewport');
     const node = this.#view.nodes.find(n => n.markerId === job.markerId);
     viewport.scrollLeft = Math.max(0, node.x - (viewport.clientWidth + this.#view.gutter) / 2);
-    this.dispatchEvent(new CustomEvent('job-select', { bubbles: true, composed: true, detail: { jobId: id, rootJobId: job.rootJobId } }));
+    this.dispatchEvent(new CustomEvent('job-select', { bubbles: true, composed: true,
+      detail: { jobId: id, rootJobId: job.rootJobId, rootJobIds: job.rootJobIds } }));
     return true;
   }
   #highlight(id) {

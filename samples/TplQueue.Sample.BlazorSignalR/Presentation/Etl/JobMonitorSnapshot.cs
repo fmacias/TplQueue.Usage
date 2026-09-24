@@ -14,11 +14,13 @@ public sealed record JobMonitorQueue(string Id, string Name, int MaxParallelism)
 /// One observed job. Assigned positions use a captured Started event timestamp.
 /// A null channel means the channel or its acquisition timestamp is not yet known.
 /// EnqueuedAt retains the observed pre-execution position after channel assignment.
+/// RootJobIds preserves every composed run membership. RootJobId is null for shared non-root jobs.
 /// </summary>
 public sealed record JobMonitorJob(string Id, string? RootJobId, string Name, string Description,
     string QueueId, int? Channel, DateTimeOffset ObservedAt, string State, double? DurationMs,
     IReadOnlyList<string> DependsOn, IReadOnlyDictionary<string, string> Metadata, bool IsRoot,
-    DateTimeOffset? EnqueuedAt = null);
+    DateTimeOffset? EnqueuedAt = null,
+    IReadOnlyList<string>? RootJobIds = null);
 
 /// <summary>Maps presentation snapshots without exposing runtime objects or inventing execution facts.</summary>
 internal static class JobMonitorMapper
@@ -52,6 +54,8 @@ internal static class JobMonitorMapper
             assigned ? job.ChannelStartedAt!.Value : job.EnqueuedAt ?? job.FirstObservedAt,
             job.Status switch { "queued" => "waiting", "canceled" => "cancelled", "running" when job.RetryCount > 0 => "retried", _ => job.Status },
             job.StartedAt.HasValue && job.EndedAt.HasValue ? Math.Max(0, (job.EndedAt.Value - job.StartedAt.Value).TotalMilliseconds) : null,
-            job.DependencyJobIds.Select(id => id.ToString()).ToArray(), metadata, job.RootJobId == job.JobId, job.EnqueuedAt);
+            job.DependencyJobIds.Select(id => id.ToString()).ToArray(), metadata, job.RootJobId == job.JobId, job.EnqueuedAt,
+            Array.AsReadOnly((job.RootJobIds ?? (job.RootJobId.HasValue ? new[] { job.RootJobId.Value } : Array.Empty<Guid>()))
+                .Select(id => id.ToString()).ToArray()));
     }
 }

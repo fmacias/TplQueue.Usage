@@ -82,6 +82,14 @@ enqueue-to-start arrows connect positions of the same job. Missing dependency
 endpoints remain unresolved. State aliases `queued` and `canceled`
 normalize to `waiting` and `cancelled`; unsupported states display as `unknown`.
 
+Optional `rootJobIds` lists every composed run membership, including while running
+or after failure/cancellation. It is detached, deduplicated and included in
+`job-select`. Older producers may supply only `rootJobId`; normalization then
+uses that as a one-item list. For shared non-roots the sample supplies null for
+the singular field and all memberships in the list. Shared jobs keep one ID;
+selection traverses actual dependencies in both directions and highlights all
+connected roots. Membership does not synthesize edges or execution facts.
+
 The browser receives presentation values only. Metadata is bounded to 12 scalar
 entries, keys to 48 characters and values to 160; structured values are summarized.
 Text is rendered with textContent, never inserted as HTML.
@@ -96,7 +104,7 @@ Text is rendered with textContent, never inserted as HTML.
 | `focusJob(id, phase?)` | Focus the current position, or `enqueue`/`execution`; expand its history strip and select the same logical job |
 | `clearFocus()` | Remove selection and graph emphasis |
 | `selectedJobId`, `referenceTime`, `isFollowingLive`, `visibleWindowMs` | Read-only controller state |
-| `job-select` | Bubbling, composed event containing jobId and rootJobId |
+| `job-select` | Bubbling, composed event containing jobId, rootJobId and rootJobIds |
 
 ## Review map
 

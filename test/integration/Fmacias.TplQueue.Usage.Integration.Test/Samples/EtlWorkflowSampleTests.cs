@@ -34,6 +34,8 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             Assert.Multiple(() =>
             {
                 Assert.That(rootJobId, Is.EqualTo(root!.Id));
+                Assert.That(jobs.Select(job => provider.GetRequiredService<ISimulationGraphCatalog>().GetRootJobIds(job.Id)),
+                    Is.All.EqualTo(new[] { rootJobId }));
                 Assert.That(parallelQueue.GenericDataJobEnqueueCount, Is.Zero);
                 Assert.That(jobs.Select(job => job.Name), Is.EqualTo(new[]
                 {

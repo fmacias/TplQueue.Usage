@@ -48,11 +48,14 @@ namespace TplQueue.Sample.Simulation.Composition
             services.TryAddSingleton<IFifoQ>(CreateFifoQueue);
             services.TryAddSingleton<IParallelQ>(CreateParallelQueue);
             services.TryAddSingleton<ICacheQ>(CreateCacheQueue);
+            services.TryAddSingleton<SimulationGraphCatalog>();
+            services.TryAddSingleton<ISimulationGraphCatalog>(sp => sp.GetRequiredService<SimulationGraphCatalog>());
             services.TryAddSingleton<EtlQueueRuntime>(sp => EtlQueueRuntime.Create(
                 sp.GetRequiredService<IFifoQ>(),
                 sp.GetRequiredService<IParallelQ>(),
                 sp.GetRequiredService<ICacheQ>(),
-                sp.GetRequiredService<ILogger<EtlQueueRuntime>>()));
+                sp.GetRequiredService<ILogger<EtlQueueRuntime>>(),
+                sp.GetRequiredService<SimulationGraphCatalog>()));
             services.TryAddSingleton<IEtlWorkflow, EtlWorkflow>();
             services.TryAddSingleton<ILegacyMeasurementCollector, LegacyMeasurementCollector>();
             services.TryAddSingleton<ILegacyMeasurementScenario, LegacyMeasurementScenario>();

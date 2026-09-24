@@ -50,6 +50,13 @@ exceptions or synchronization objects across JS interop. C# owns runtime behavio
 the browser owns view state. DTOs are handwritten and require semantic review;
 they are not generated from an authoritative API schema.
 
+The Simulation module registers graph membership before enqueue and exposes it
+through `ISimulationGraphCatalog`. The projection joins that composition metadata
+to event-observed jobs. `rootJobIds` and `job-select` retain all shared memberships
+for running, failed and cancelled graphs; the compatible singular `rootJobId` is
+null for shared non-roots. Membership never substitutes for lifecycle observations
+or channel acquisition. See the maintained [graph identity contract](../../docs/architecture/blazor-consumer-sample.md#simulation-graph-identity).
+
 ## 2. Channel observation: the chosen contract
 
 The additive public `IJobExecutionEvent : IJobEvent` interface in Abstractions

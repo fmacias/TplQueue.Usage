@@ -44,6 +44,9 @@ The Simulation module owns finite ETL delivery: two timer ticks per queue,
 one root per tick, a one-second startup offset and a three-second interval.
 The host attaches observers before starting the simulation; browser connections
 do not start or restart it. See [delivery settings and lifecycle](docs/architecture/blazor-consumer-sample.md#finite-scenario-delivery).
+Graph membership is captured before enqueue, so running, failed and cancelled jobs
+retain their root identity. Shared jobs keep all root memberships and one job ID;
+see [graph identity](docs/architecture/blazor-consumer-sample.md#simulation-graph-identity).
 Assigned positions use backend Started timestamps. The collapsible Unassigned strip retains recorded enqueue markers after assignment, with directed connectors to Started positions when both are visible. Both markers select the same job.
 After its initial snapshot, the Blazor monitor refreshes data when new observer events change the projection. Live time advances on snapshot arrival; the idle view has no periodic refresh. User interactions and resizing still redraw locally.
 

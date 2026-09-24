@@ -1,5 +1,6 @@
 using Fmacias.TplQueue.Contracts;
 using Microsoft.Extensions.Logging;
+using TplQueue.Sample.Etl.Contracts;
 
 namespace TplQueue.Sample.BlazorSignalR.Presentation.Etl;
 
@@ -11,16 +12,19 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
     private const int MaximumErrorLength = 256;
     private readonly EtlQueueCatalog _catalog;
     private readonly ILogger<EtlExecutionProjectionStore> _logger;
+    private readonly ISimulationGraphCatalog? _graphs;
     private readonly object _sync = new();
     private readonly Dictionary<Guid, MutableJob> _jobs = new();
     private readonly HashSet<EventFingerprint> _seenEvents = new();
 
     public EtlExecutionProjectionStore(
         EtlQueueCatalog catalog,
-        ILogger<EtlExecutionProjectionStore> logger)
+        ILogger<EtlExecutionProjectionStore> logger,
+        ISimulationGraphCatalog? graphs = null)
     {
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _graphs = graphs;
     }
 
     public event EventHandler? Changed;
@@ -61,7 +65,8 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
             CaptureDependencies(job, jobEvent.JobInfo);
             ApplyLifecycle(job, jobEvent);
 
-            if (jobEvent.Status == JobEventStatus.RootSuccessed)
+            if (jobEvent.Status == JobEventStatus.RootSuccessed &&
+                (_graphs?.GetRootJobIds(job.JobId).Count ?? 0) == 0)
             {
                 // A root event carries the complete dependency graph. Use the
                 // root event timestamp for any dependency that has not emitted
@@ -82,7 +87,7 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
             var jobs = _jobs.Values
                 .OrderBy(job => job.FirstObservedAt)
                 .ThenBy(job => job.JobId)
-                .Select(job => job.ToSnapshot())
+                .Select(job => job.ToSnapshot(_graphs?.GetRootJobIds(job.JobId)))
                 .ToArray();
             var queues = _catalog.Descriptors
                 .Select(descriptor => CreateQueueSnapshot(descriptor, jobs))
@@ -340,23 +345,32 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
         public DateTimeOffset? ChannelObservedAt { get; set; }
         public DateTimeOffset? ChannelStartedAt { get; set; }
 
-        public EtlJobSnapshot ToSnapshot() => new(
-            JobId,
-            RootJobId,
-            DependencyJobIds.OrderBy(id => id).ToArray(),
-            Name,
-            QueueGroupId,
-            QueueDisplayName,
-            Status,
-            FirstObservedAt,
-            EnqueuedAt,
-            StartedAt,
-            EndedAt,
-            RetryCount,
-            Error,
-            LastEventType,
-            LastEventAt,
-            ExecutionChannel,
-            ChannelStartedAt);
+        public EtlJobSnapshot ToSnapshot(IReadOnlyList<Guid>? registeredRoots)
+        {
+            var roots = registeredRoots is { Count: > 0 }
+                ? registeredRoots
+                : RootJobId.HasValue ? new[] { RootJobId.Value } : Array.Empty<Guid>();
+            // Keep the legacy singular value only when unambiguous (or this job is itself a root).
+            var rootId = roots.Contains(JobId) ? JobId : roots.Count == 1 ? roots[0] : (Guid?)null;
+            return new(
+                JobId,
+                rootId,
+                DependencyJobIds.OrderBy(id => id).ToArray(),
+                Name,
+                QueueGroupId,
+                QueueDisplayName,
+                Status,
+                FirstObservedAt,
+                EnqueuedAt,
+                StartedAt,
+                EndedAt,
+                RetryCount,
+                Error,
+                LastEventType,
+                LastEventAt,
+                ExecutionChannel,
+                ChannelStartedAt,
+                Array.AsReadOnly(roots.ToArray()));
+        }
     }
 }

@@ -236,6 +236,33 @@ await check('grouped enqueue history is individually selectable at its own time'
   assert(viewer.shadowRoot.querySelector('.exact-time').textContent==='11:59:57.000','inspect enqueue time, not execution');
   assert(!viewer.shadowRoot.querySelector('.assignment'),'out-of-window endpoint is not fabricated');
 });
+await check('running failed and cancelled shared graphs preserve selection and every root membership', async () => {
+  let selected;
+  const listener=e=>selected=e.detail;
+  viewer.addEventListener('job-select',listener);
+  try {
+    for (const state of ['running','failed','cancelled']) {
+      const make=(id,channel,roots,dependsOn=[])=>({id,queueId:'q',channel,name:id,state,
+        rootJobIds:roots,rootJobId:roots.length===1?roots[0]:null,isRoot:roots.includes(id),dependsOn,
+        observedAt:'2026-09-17T11:59:59.000Z'});
+      viewer.setData({queues:[{id:'q',name:'Queue',maxParallelism:3}],jobs:[
+        make('shared',0,['first','second']),make('first',1,['first'],['shared']),
+        make('second',2,['second'],['shared']),
+        {...make('unrelated',null,[]),observedAt:'2026-09-17T11:59:58.000Z'}]});
+      viewer.showOverview(); viewer.focusJob('unrelated'); viewer.focusJob('shared'); await frame();
+      assert(selected.jobId==='shared' && selected.rootJobId===null,'shared job has no arbitrary owning root');
+      assert(selected.rootJobIds.join(',')==='first,second','all memberships in selection');
+      for(const id of ['shared','first','second']) {
+        const node=viewer.shadowRoot.querySelector(`[data-job-id="${id}"]`);
+        assert(node && !node.classList.contains('dim'),`${state}: connected graph emphasized`);
+      }
+      assert(viewer.shadowRoot.querySelector('[data-job-id="unrelated"]').classList.contains('dim'),'unrelated job dimmed');
+      viewer.focusJob('first'); await frame();
+      assert(selected.rootJobIds.join(',')==='first','root selection preserves its identity');
+    }
+  } finally { viewer.removeEventListener('job-select',listener); }
+});
+
 document.querySelector('#summary').textContent=`${passed} passed; ${failed} failed`;
 document.documentElement.dataset.result = failed ? 'failed' : 'passed';
 if(location.search.includes('automation')) await fetch('http://127.0.0.1:4178/__acceptance/done?id=standalone', {mode:'no-cors'});

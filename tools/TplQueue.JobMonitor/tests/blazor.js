@@ -29,6 +29,12 @@ await check('real channel values and selection round trip',async()=>{
   const result=await until(()=>v.shadowRoot.querySelector('.results button'));
   result.click();await wait(200);
   assert(v.selectedJobId,'selected job');
+  let selection;
+  const membershipListener=e=>selection=e.detail;
+  v.addEventListener('job-select',membershipListener);
+  try { v.focusJob(v.selectedJobId); } finally { v.removeEventListener('job-select',membershipListener); }
+  assert(selection?.rootJobIds?.length===1 && selection.rootJobId===selection.rootJobIds[0],
+    'real simulation membership reaches browser selection');
   // The same selected job can also have an Unassigned enqueue-history marker.
   const nodes=[...v.shadowRoot.querySelectorAll('.selected title')];
   assert(nodes.some(node=>/Channel: \d/.test(node.textContent)),

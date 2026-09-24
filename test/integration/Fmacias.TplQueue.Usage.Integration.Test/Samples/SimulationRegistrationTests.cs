@@ -8,6 +8,24 @@ namespace Fmacias.TplQueue.Integration.Test.Samples;
 public sealed class SimulationRegistrationTests
 {
     [Test]
+    public void WorkflowRegistration_IncludesGraphMembershipBeforeAnyOutcome()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddSampleEtlWorkflow();
+        var registration = services.SingleOrDefault(item =>
+            item.ServiceType.Name == "ISimulationGraphCatalog");
+
+        // Assert
+        Assert.That(registration, Is.Not.Null,
+            "Root membership must be available before successful completion.");
+        Assert.That(registration!.ServiceType.Assembly, Is.EqualTo(typeof(IEtlWorkflow).Assembly));
+        Assert.That(registration.Lifetime, Is.EqualTo(ServiceLifetime.Singleton));
+    }
+
+    [Test]
     public void WorkflowRegistration_IncludesModuleOwnedSimulationLifecycle()
     {
         // Arrange

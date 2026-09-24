@@ -1,6 +1,6 @@
 # Simulation use-case implementation plan
 
-Created: 2026-09-22. Status: P00, P01 and P02 complete; remaining tasks pending.
+Created: 2026-09-22. Status: P00-P03 complete; use-case tasks pending.
 
 ## Purpose and ownership
 
@@ -74,17 +74,18 @@ deferred until their dependent task; do not treat them as accepted defaults.
 | Standard delivery | One root every 3 seconds | Implemented in P02; see execution record |
 | Independent arrivals | Queue/scenario intervals of 2, 3 and 5 seconds | Deferred to UC09; preset to validate |
 | Burst delivery | Five small roots every 10 seconds | Deferred to UC19; preset to validate |
-| Shared-root representation | Preserve one job identity and all dependency edges; decide how run/root memberships are exposed | Resolve before UC12 |
+| Shared-root representation | One job ID, all dependency edges and rootJobIds; root ID identifies the current one-root run | Implemented in P03 |
 | Continuous retention | Bound completed history and event fingerprints while retaining active graphs and their dependencies | Resolve before UC25 |
 | Project rename | Implementation becomes `TplQueue.Sample.Simulation`; contracts name remains unchanged until decided | Complete, 2026-09-24 (P01) |
 
 See the [P00 execution record](simulation-tasks/p00-record-decisions-and-establish-baseline.md#execution-record)
 for reference modes, retained tests, exact validation results and baseline limitations.
-Shared-root representation, continuous retention and the contracts-project name
+Continuous retention and the contracts-project name
 remain unresolved at their existing checkpoints. P02 implements finite delivery and
 admission semantics, recorded in its [execution record](simulation-tasks/p02-add-finite-timer-driven-delivery-and-minimal-contracts.md#execution-record).
-The observed baseline below the ownership section describes the pre-P02 workload;
-see the [maintained delivery contract](../architecture/blazor-consumer-sample.md#finite-scenario-delivery) for current behavior.
+The observed baseline below the ownership section describes the pre-P02 workload.
+P03 adds composition membership before enqueue, retaining all shared root IDs across outcomes; see its [execution record](simulation-tasks/p03-establish-graph-identity-for-all-outcomes.md#execution-record).
+See the [maintained delivery contract](../architecture/blazor-consumer-sample.md#finite-scenario-delivery) for current behavior.
 
 Suggested profiles are 3-15 jobs for normal explanation, 16-30 for complex
 demonstrations, 31-50 for large interactive examples, and 100-500 for stress tests.
@@ -252,7 +253,7 @@ rewrite them to match the actual completed change.
 - [x] [P00 - Record decisions and establish baseline](simulation-tasks/p00-record-decisions-and-establish-baseline.md)
 - [x] [P01 - Isolate the module rename](simulation-tasks/p01-isolate-the-module-rename.md)
 - [x] [P02 - Add finite timer-driven delivery and minimal contracts](simulation-tasks/p02-add-finite-timer-driven-delivery-and-minimal-contracts.md)
-- [ ] [P03 - Establish graph identity for all outcomes](simulation-tasks/p03-establish-graph-identity-for-all-outcomes.md)
+- [x] [P03 - Establish graph identity for all outcomes](simulation-tasks/p03-establish-graph-identity-for-all-outcomes.md)
 
 P00 precedes size-dependent defaults. P01 completed the isolated implementation
 rename to `TplQueue.Sample.Simulation`; the contracts name remains unchanged.
