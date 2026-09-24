@@ -1,6 +1,6 @@
 # Simulation use-case implementation plan
 
-Created: 2026-09-22. Status: P00 and P01 complete; remaining tasks pending.
+Created: 2026-09-22. Status: P00, P01 and P02 complete; remaining tasks pending.
 
 ## Purpose and ownership
 
@@ -71,7 +71,7 @@ deferred until their dependent task; do not treat them as accepted defaults.
 | Readable branching | Usually 2-4 branches | Deferred to UC06; proposal only |
 | Tighter alternative | Default 10 jobs, maximum 30 | Not selected; 15/50 accepted |
 | Stress profile | 100-500 jobs, explicitly enabled and bounded | Deferred to UC20; proposal only |
-| Standard delivery | One root every 3 seconds | Deferred to P02/UC02; preset to validate |
+| Standard delivery | One root every 3 seconds | Implemented in P02; see execution record |
 | Independent arrivals | Queue/scenario intervals of 2, 3 and 5 seconds | Deferred to UC09; preset to validate |
 | Burst delivery | Five small roots every 10 seconds | Deferred to UC19; preset to validate |
 | Shared-root representation | Preserve one job identity and all dependency edges; decide how run/root memberships are exposed | Resolve before UC12 |
@@ -81,8 +81,10 @@ deferred until their dependent task; do not treat them as accepted defaults.
 See the [P00 execution record](simulation-tasks/p00-record-decisions-and-establish-baseline.md#execution-record)
 for reference modes, retained tests, exact validation results and baseline limitations.
 Shared-root representation, continuous retention and the contracts-project name
-remain unresolved at their existing checkpoints. Delivery lifecycle and admission
-semantics remain proposals for P02; P00 does not approve them or change runtime defaults.
+remain unresolved at their existing checkpoints. P02 implements finite delivery and
+admission semantics, recorded in its [execution record](simulation-tasks/p02-add-finite-timer-driven-delivery-and-minimal-contracts.md#execution-record).
+The observed baseline below the ownership section describes the pre-P02 workload;
+see the [maintained delivery contract](../architecture/blazor-consumer-sample.md#finite-scenario-delivery) for current behavior.
 
 Suggested profiles are 3-15 jobs for normal explanation, 16-30 for complex
 demonstrations, 31-50 for large interactive examples, and 100-500 for stress tests.
@@ -249,7 +251,7 @@ rewrite them to match the actual completed change.
 
 - [x] [P00 - Record decisions and establish baseline](simulation-tasks/p00-record-decisions-and-establish-baseline.md)
 - [x] [P01 - Isolate the module rename](simulation-tasks/p01-isolate-the-module-rename.md)
-- [ ] [P02 - Add finite timer-driven delivery and minimal contracts](simulation-tasks/p02-add-finite-timer-driven-delivery-and-minimal-contracts.md)
+- [x] [P02 - Add finite timer-driven delivery and minimal contracts](simulation-tasks/p02-add-finite-timer-driven-delivery-and-minimal-contracts.md)
 - [ ] [P03 - Establish graph identity for all outcomes](simulation-tasks/p03-establish-graph-identity-for-all-outcomes.md)
 
 P00 precedes size-dependent defaults. P01 completed the isolated implementation

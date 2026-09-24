@@ -40,6 +40,10 @@ These samples are the canonical runnable examples cited by the product-repositor
 
 The Blazor sample uses the reusable `job-queue-timeline` Web Component with real runtime execution channels, vertical time, and a full-area viewer without a permanent details panel. See the maintained architecture guide for contracts and validation.
 The component's five-second overview uses exact square position markers, a left UTC ruler and compact channels. Dense jobs use count markers with temporary closer inspection in the same viewer.
+The Simulation module owns finite ETL delivery: two timer ticks per queue,
+one root per tick, a one-second startup offset and a three-second interval.
+The host attaches observers before starting the simulation; browser connections
+do not start or restart it. See [delivery settings and lifecycle](docs/architecture/blazor-consumer-sample.md#finite-scenario-delivery).
 Assigned positions use backend Started timestamps. The collapsible Unassigned strip retains recorded enqueue markers after assignment, with directed connectors to Started positions when both are visible. Both markers select the same job.
 After its initial snapshot, the Blazor monitor refreshes data when new observer events change the projection. Live time advances on snapshot arrival; the idle view has no periodic refresh. User interactions and resizing still redraw locally.
 

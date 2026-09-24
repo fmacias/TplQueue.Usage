@@ -12,8 +12,6 @@ internal static class MeasurementEtlServiceCollectionExtensions
     {
         if (services == null) throw new ArgumentNullException(nameof(services));
 
-        services.AddSingleton<ILegacyMeasurementCollector, LegacyMeasurementCollector>();
-        services.AddSingleton<ILegacyMeasurementScenario, LegacyMeasurementScenario>();
         services.AddSingleton(sp => new EtlQueueCatalog(new[]
         {
             new EtlQueueDescriptor(

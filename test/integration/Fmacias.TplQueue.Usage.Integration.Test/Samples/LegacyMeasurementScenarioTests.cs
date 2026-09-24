@@ -1,4 +1,4 @@
-using TplQueue.Sample.BlazorSignalR.Application;
+using TplQueue.Sample.Simulation.Scenarios;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Etl.Contracts.Dto;
 

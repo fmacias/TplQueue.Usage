@@ -20,13 +20,19 @@ await check('observer snapshots render through the actual Blazor circuit',async(
   assert(!frame.contentDocument.querySelector('.job-details-panel'),'no details');
 });
 await check('real channel values and selection round trip',async()=>{
+  // Finite timer arrivals can expose all jobs while the last roots are still queued.
+  // A queued job has no channel until Started; select after real execution completes.
+  await until(()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
+    .filter(q=>q.dataset.completed==='6').length===3);
   const v=viewer(),input=v.shadowRoot.querySelector('input[type=search]');
   input.value='measurements';input.dispatchEvent(new Event('input',{bubbles:true}));
   const result=await until(()=>v.shadowRoot.querySelector('.results button'));
   result.click();await wait(200);
   assert(v.selectedJobId,'selected job');
-  const node=v.shadowRoot.querySelector('.selected title');
-  assert(node && /Channel: \d/.test(node.textContent),'runtime channel is known');
+  // The same selected job can also have an Unassigned enqueue-history marker.
+  const nodes=[...v.shadowRoot.querySelectorAll('.selected title')];
+  assert(nodes.some(node=>/Channel: \d/.test(node.textContent)),
+    `runtime channel is known; selected=${v.selectedJobId}; markers=${nodes.map(node=>node.textContent).join(' | ')}`);
 });
 await check('idle circuit and selection do not resend the projection snapshot',async()=>{
   await until(()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]

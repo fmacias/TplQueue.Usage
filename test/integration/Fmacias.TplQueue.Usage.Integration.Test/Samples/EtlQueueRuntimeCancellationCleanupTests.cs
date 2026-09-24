@@ -213,6 +213,8 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
 
             public int GenericDataJobEnqueueCount { get; private set; }
 
+            public int ActiveSubscriptions { get { lock (_sync) return _observers.Count; } }
+
             public IDataJobRoot? LastDataJobRoot { get; private set; }
 
             public JobEventStatus TerminalStatus { get; set; } =

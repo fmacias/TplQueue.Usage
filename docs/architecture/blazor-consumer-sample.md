@@ -16,10 +16,56 @@ namespace; the sample uses process-local memory, with no persisted cache migrati
 
 The sample is a passive .NET 8 Interactive Server application. C# owns queue
 configuration, payloads, handlers, retries, graph topology and materialized state.
-The hosted service attaches observers before submitting two three-job ETL roots
-to each of ParallelQ, FifoQ and CacheQ. Browser connections do not start workloads.
+The hosted service attaches all observers before starting `ISimulationService`,
+then adapts application shutdown to that service. The Simulation module owns
+measurement collection, scenario orchestration and finite timer delivery.
+Browser connections do not start workloads.
 The built-in Blazor circuit carries updates; there is no application REST API,
 OpenAPI document or custom dashboard SignalR hub.
+
+### Finite scenario delivery
+
+`AddSampleEtlWorkflow()` registers three scenarios, `etl-parallel`, `etl-fifo` and
+`etl-cache`. Each submits one existing three-job ETL root per tick, after a
+one-second startup offset and then at a three-second interval, for two ticks.
+The per-scenario admission bound is two active roots, including queued roots.
+With successful submissions this produces six roots and eighteen unique jobs;
+Ingest -> Transform -> Load and handler delays 500/700/400 ms are unchanged.
+The accepted 15/50-job graph defaults remain for later graph scenarios.
+
+The overload accepting `SimulationScenarioSettings` configures scenario ID,
+queue, interval, startup offset, roots per tick, finite repetitions and maximum
+active runs. Settings are immutable and validated before timer creation; scenario
+IDs must be unique. Interval is 1 through `Int32.MaxValue` milliseconds; offset
+is zero through that maximum. Zero offset schedules an asynchronous first tick
+at timer resolution. Roots per tick and repetitions are positive; the active-run
+bound must fit a complete batch.
+
+Each scenario owns one internal `System.Timers.Timer`. Its short elapsed callback
+counts a tick and schedules at most one tracked submission worker. Busy ticks or
+ticks without room for a full batch count as skipped; they consume repetitions
+and create no catch-up backlog. Admission includes previously submitted roots
+until the runtime observes their terminal outcome, including cache-rehydrated
+roots. Delayed or lost terminal observations conservatively retain capacity.
+Submission failures are observed in the worker, counted, and exposed as the last
+error message in detached `ScenarioDeliverySnapshot` values. A partially submitted
+batch retains its accepted roots; later ticks may continue. Runtime handler
+failures continue through the existing queue observer path.
+
+The lifecycle is single-use. `Start` rejects repeated starts and starts after
+stop/disposal. `StopAsync` closes admission and waits for any already-admitted
+submission; no submission remains after its returned task completes. It neither
+drains nor cancels accepted graphs. The host passes its shutdown token to the
+simulation and the graphs, preserving shutdown cancellation. `Completion` means
+finite arrivals and submissions have finished, not that graph execution, observer
+delivery or cache acknowledgment has finished. Stop/dispose ignore late callbacks;
+disposal also waits for submission work before releasing timers. Dashboard Pause
+still freezes only viewing time. Restart, explicit drain/cancel controls and
+continuous retention are deferred to their later tasks.
+
+Contracts remain in `TplQueue.Sample.Etl.Contracts`; timer types and live jobs
+stay internal. Delivery snapshots expose scenario IDs and accepted root IDs, but
+do not add running/failed/cancelled graph membership to the monitor (P03).
 
 ```text
 queue execution capacity and lifecycle snapshots

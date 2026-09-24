@@ -73,6 +73,7 @@ alignment findings, and suggestions. Do not duplicate it in another design guide
 ### Current Blazor profile
 
 - The sample is a passive .NET 8 Interactive Server dashboard; its hosted workload runs independently of browsers.
+- The Simulation module owns scenario collection and finite `System.Timers.Timer` delivery. Keep the host as observer/lifecycle adapter. Defaults are one root per tick, two ticks per queue, one-second offset, three-second interval and two active roots per scenario. Busy/capacity ticks are skipped and counted. `StopAsync` closes admission and waits for pending submissions; the host token cancels jobs. Delivery completion is not graph drain. See the maintained architecture guide for the full contract; do not add restart or endless arrivals before their acceptance tasks.
 - The current frontend is `tools/TplQueue.JobMonitor`, a reusable JavaScript Web Component with a small Razor/JS snapshot bridge. ScatterChart and vis-timeline are retired.
 - The full viewer uses vertical time, real logical execution channels and explicit Unassigned placement for null channels. Root identity never determines channel placement. There is no permanent details panel.
 - The overview shows five seconds ending at the bottom reference. Square centers retain exact timestamps; collisions use count markers with temporary interval inspection, never timestamp displacement. Time zoom must not widen channels. Keep the fixed left UTC ruler and keyboard access to grouped jobs.

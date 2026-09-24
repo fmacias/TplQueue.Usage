@@ -35,15 +35,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\SampleEtlDemoHostedService.cs"
+             Link="Samples\SampleEtlDemoHostedService.cs" />
     <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\JobMonitorSnapshot.cs" Link="Samples\JobMonitorSnapshot.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\ILegacyMeasurementCollector.cs"
-             Link="Samples\ILegacyMeasurementCollector.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\ILegacyMeasurementScenario.cs"
-             Link="Samples\ILegacyMeasurementScenario.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\LegacyMeasurementScenario.cs"
-             Link="Samples\LegacyMeasurementScenario.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\LegacyMeasurementCollector.cs"
-             Link="Samples\LegacyMeasurementCollector.cs" />
     <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\EtlQueueObserver.cs"
              Link="Samples\EtlQueueObserver.cs" />
     <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\EtlDashboardSnapshot.cs"

@@ -109,6 +109,9 @@ namespace TplQueue.Sample.Simulation.Runtime
             });
         }
 
+        /// <summary>Includes queued roots until an observed terminal outcome releases their registration.</summary>
+        internal bool IsActive(Guid rootJobId) => _cancellations.ContainsKey(rootJobId);
+
         public bool Cancel(Guid rootJobId)
         {
             ThrowIfDisposed();

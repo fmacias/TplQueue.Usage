@@ -1,7 +1,14 @@
 # TplQueue Blazor ETL job monitor
 
 Passive .NET 8 Interactive Server dashboard for `TplQueue.Sample.Simulation`. The
-backend starts two three-job roots on each queue independently of browsers.
+backend uses finite timers owned by the Simulation module: one three-job root
+per queue after one second, then one more three seconds later. This produces six
+roots and eighteen jobs independently of browsers. Each scenario admits at most
+two active roots; busy or capacity-limited ticks are counted and skipped.
+The host attaches observers before starting delivery and closes admission during
+shutdown, waiting for pending submissions. Its shutdown token cancels jobs.
+See the [finite delivery contract](../../docs/architecture/blazor-consumer-sample.md#finite-scenario-delivery)
+for configurable settings, completion semantics and failure counters.
 
 The full-area `<job-queue-timeline>` Web Component displays actual logical
 execution channels, vertical time, explicit dependency edges, search, graph focus,
