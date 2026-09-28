@@ -16,15 +16,18 @@ namespace TplQueue.Sample.Simulation
         private readonly FiniteScenarioDelivery[] _deliveries;
         private bool _started, _stopped, _disposed;
 
-        public SimulationService(ILegacyMeasurementScenario scenario, EtlQueueRuntime runtime,
+        public SimulationService(ILegacyMeasurementScenario scenario, SingleJobScenario singleJob, EtlQueueRuntime runtime,
             SimulationScenarioSettings[] settings)
         {
             if (scenario == null) throw new ArgumentNullException(nameof(scenario));
+            if (singleJob == null) throw new ArgumentNullException(nameof(singleJob));
             if (runtime == null) throw new ArgumentNullException(nameof(runtime));
             if (settings == null) throw new ArgumentNullException(nameof(settings));
             // Composition validates and copies the settings before creating any timers.
             _deliveries = settings.Select(item => new FiniteScenarioDelivery(item,
-                token => scenario.Run(item.Queue, token), runtime.IsActive, new ScenarioTimer())).ToArray();
+                token => item.Kind == SimulationScenarioKind.SingleJob
+                    ? singleJob.Run(item.Queue, token) : scenario.Run(item.Queue, token),
+                runtime.IsActive, new ScenarioTimer())).ToArray();
             Completion = Task.WhenAll(_deliveries.Select(item => item.Completion));
         }
 

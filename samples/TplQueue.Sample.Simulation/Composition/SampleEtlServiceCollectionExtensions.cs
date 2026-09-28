@@ -25,6 +25,15 @@ namespace TplQueue.Sample.Simulation.Composition
                 DefaultScenario("etl-cache", AvailableQueue.Cache)
             });
 
+        /// <summary>Registers two finite one-job arrivals per queue, three seconds apart.</summary>
+        public static IServiceCollection AddSampleSingleJobSimulation(this IServiceCollection services)
+            => AddSampleEtlWorkflow(services, new[]
+            {
+                SingleJobSettings("single-parallel", AvailableQueue.Parallel),
+                SingleJobSettings("single-fifo", AvailableQueue.FIFO),
+                SingleJobSettings("single-cache", AvailableQueue.Cache)
+            });
+
         /// <summary>Registers finite scenarios; resolving the service does not start arrivals.</summary>
         public static IServiceCollection AddSampleEtlWorkflow(this IServiceCollection services,
             IEnumerable<SimulationScenarioSettings> scenarios)
@@ -59,8 +68,10 @@ namespace TplQueue.Sample.Simulation.Composition
             services.TryAddSingleton<IEtlWorkflow, EtlWorkflow>();
             services.TryAddSingleton<ILegacyMeasurementCollector, LegacyMeasurementCollector>();
             services.TryAddSingleton<ILegacyMeasurementScenario, LegacyMeasurementScenario>();
+            services.TryAddSingleton<SingleJobScenario>();
             services.TryAddSingleton<ISimulationService>(sp => new SimulationService(
                 sp.GetRequiredService<ILegacyMeasurementScenario>(),
+                sp.GetRequiredService<SingleJobScenario>(),
                 sp.GetRequiredService<EtlQueueRuntime>(), settings));
             return services;
         }
@@ -68,6 +79,10 @@ namespace TplQueue.Sample.Simulation.Composition
         private static SimulationScenarioSettings DefaultScenario(string id, AvailableQueue queue) =>
             new SimulationScenarioSettings(id, queue, TimeSpan.FromSeconds(3),
                 TimeSpan.FromSeconds(1), 1, 2, 2);
+
+        private static SimulationScenarioSettings SingleJobSettings(string id, AvailableQueue queue) =>
+            new SimulationScenarioSettings(id, queue, TimeSpan.FromSeconds(3),
+                TimeSpan.FromSeconds(1), 1, 2, 1, SimulationScenarioKind.SingleJob);
         private static IParallelQ CreateParallelQueue(IServiceProvider serviceProvider)
         {
             var factory = serviceProvider.GetRequiredService<IQFactoryAdapter>();

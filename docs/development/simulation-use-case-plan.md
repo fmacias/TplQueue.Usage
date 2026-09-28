@@ -1,6 +1,6 @@
 # Simulation use-case implementation plan
 
-Created: 2026-09-22. Status: P00-P03 complete; use-case tasks pending.
+Created: 2026-09-22. Status: P00-P03 and UC01 complete; UC02-UC25 pending.
 
 ## Purpose and ownership
 
@@ -262,7 +262,7 @@ identification, but does not require implementing every presentation feature upf
 
 ### Use-case checklist and acceptance
 
-- [ ] [UC01 - Single job on each queue](simulation-tasks/uc01-single-job-on-each-queue.md)
+- [x] [UC01 - Single job on each queue](simulation-tasks/uc01-single-job-on-each-queue.md)
 - [ ] [UC02 - Sequential ETL chain](simulation-tasks/uc02-sequential-etl-chain.md)
 - [ ] [UC03 - Multiple FIFO roots](simulation-tasks/uc03-multiple-fifo-roots.md)
 - [ ] [UC04 - Multiple parallel roots](simulation-tasks/uc04-multiple-parallel-roots.md)

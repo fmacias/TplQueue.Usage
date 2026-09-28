@@ -8,6 +8,20 @@ namespace Fmacias.TplQueue.Integration.Test.Samples;
 public sealed class SimulationRegistrationTests
 {
     [Test]
+    public void WorkflowRegistration_IncludesSingleJobScenario()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddSampleEtlWorkflow();
+
+        // Assert
+        Assert.That(services.Any(item => item.ServiceType.Name == "SingleJobScenario"), Is.True,
+            "Finite delivery must support an independent one-job root without ETL dependencies.");
+    }
+
+    [Test]
     public void WorkflowRegistration_IncludesGraphMembershipBeforeAnyOutcome()
     {
         // Arrange

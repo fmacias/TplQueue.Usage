@@ -60,3 +60,31 @@ Build it through `WorkspaceTplQueue.sln` for the full source reference switch.
 Package-only validation is a separate maintained workflow. A standalone rebuild
 must select a coordinated package version containing `IJobExecutionEvent`;
 the older default preview package does not contain that new optional contract.
+
+## Single-job profile (UC01)
+
+After building through `WorkspaceTplQueue`, launch this opt-in profile from that
+workspace directory:
+
+```powershell
+dotnet run --no-build --project ../TplQueue.Usage/samples/TplQueue.Sample.BlazorSignalR -- --Simulation:Profile=single-job --TplQueue:Queues:ParallelQ:MaxParallelism=2 --TplQueue:Queues:CacheQ:MaxParallelism=2
+```
+
+Each queue receives one independent ingest root after one second and another
+three seconds later: six roots, six jobs, no composed prerequisites. The handler
+takes approximately 500 ms. Each scenario admits at most one active root; the
+normal finite skip/stop rules apply. Search for `Single job:` and expand **U** to
+inspect enqueue history and the Started marker of the same job. Two position
+markers still count as one job. Channels come from runtime events; successive
+jobs can use different available channels before a released channel is reused.
+
+The default `etl` profile remains unchanged. Unknown profile names fail at
+startup. Module consumers can select `SimulationScenarioKind.SingleJob` in
+`SimulationScenarioSettings`; the original constructor continues to select ETL.
+
+Use Cache capacity two or greater for this demonstration: a capacity-one probe
+stalled in the current source baseline before emitting job events. See the
+[UC01 evidence and limitations](../../docs/development/simulation-tasks/uc01-single-job-on-each-queue.md#execution-record).
+The Debug browser harness accepts `?profile=single-job` when connected to this
+profile; it validates six jobs and both markers for every root. The query changes
+test expectations only; it does not start or configure the simulation.

@@ -8,7 +8,13 @@ using TplQueue.Sample.Simulation.Composition;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddTplQueue(builder.Configuration, CoreApi.Create());
-builder.Services.AddSampleEtlWorkflow();
+var simulationProfile = builder.Configuration["Simulation:Profile"] ?? "etl";
+switch (simulationProfile)
+{
+    case "etl": builder.Services.AddSampleEtlWorkflow(); break;
+    case "single-job": builder.Services.AddSampleSingleJobSimulation(); break;
+    default: throw new InvalidOperationException($"Unknown simulation profile '{simulationProfile}'. Use 'etl' or 'single-job'.");
+}
 builder.Services.AddMeasurementEtlConsumer();
 builder.Services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
 

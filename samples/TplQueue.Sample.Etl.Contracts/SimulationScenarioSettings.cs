@@ -2,11 +2,18 @@ using System;
 
 namespace TplQueue.Sample.Etl.Contracts
 {
-    /// <summary>Immutable bounds for one independently scheduled, finite ETL scenario.</summary>
+    /// <summary>Immutable bounds for one independently scheduled, finite scenario.</summary>
     public sealed class SimulationScenarioSettings
     {
         public SimulationScenarioSettings(string scenarioId, AvailableQueue queue, TimeSpan interval,
             TimeSpan startupOffset, int rootsPerTick, int repetitions, int maximumActiveRuns)
+            : this(scenarioId, queue, interval, startupOffset, rootsPerTick, repetitions,
+                maximumActiveRuns, SimulationScenarioKind.Etl) { }
+
+        /// <summary>Creates finite delivery settings for the selected graph kind.</summary>
+        public SimulationScenarioSettings(string scenarioId, AvailableQueue queue, TimeSpan interval,
+            TimeSpan startupOffset, int rootsPerTick, int repetitions, int maximumActiveRuns,
+            SimulationScenarioKind kind)
         {
             if (string.IsNullOrWhiteSpace(scenarioId)) throw new ArgumentException("A scenario ID is required.", nameof(scenarioId));
             if (!Enum.IsDefined(typeof(AvailableQueue), queue)) throw new ArgumentOutOfRangeException(nameof(queue));
@@ -17,6 +24,7 @@ namespace TplQueue.Sample.Etl.Contracts
             if (rootsPerTick <= 0) throw new ArgumentOutOfRangeException(nameof(rootsPerTick));
             if (repetitions <= 0) throw new ArgumentOutOfRangeException(nameof(repetitions));
             if (maximumActiveRuns < rootsPerTick) throw new ArgumentOutOfRangeException(nameof(maximumActiveRuns));
+            if (!Enum.IsDefined(typeof(SimulationScenarioKind), kind)) throw new ArgumentOutOfRangeException(nameof(kind));
             ScenarioId = scenarioId;
             Queue = queue;
             Interval = interval;
@@ -24,7 +32,11 @@ namespace TplQueue.Sample.Etl.Contracts
             RootsPerTick = rootsPerTick;
             Repetitions = repetitions;
             MaximumActiveRuns = maximumActiveRuns;
+            Kind = kind;
         }
+
+        /// <summary>Gets the graph kind; the original constructor selects ETL.</summary>
+        public SimulationScenarioKind Kind { get; }
 
         /// <summary>Gets the stable scenario name; submitted roots have unique runtime IDs.</summary>
         public string ScenarioId { get; }

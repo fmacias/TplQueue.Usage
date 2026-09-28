@@ -44,6 +44,8 @@ The Simulation module owns finite ETL delivery: two timer ticks per queue,
 one root per tick, a one-second startup offset and a three-second interval.
 The host attaches observers before starting the simulation; browser connections
 do not start or restart it. See [delivery settings and lifecycle](docs/architecture/blazor-consumer-sample.md#finite-scenario-delivery).
+An opt-in `single-job` profile submits one independent ingest root per queue per
+tick, six one-job roots in total. See the [UC01 profile and launch command](samples/TplQueue.Sample.BlazorSignalR/README.md#single-job-profile-uc01).
 Graph membership is captured before enqueue, so running, failed and cancelled jobs
 retain their root identity. Shared jobs keep all root memberships and one job ID;
 see [graph identity](docs/architecture/blazor-consumer-sample.md#simulation-graph-identity).

@@ -1,4 +1,6 @@
 const frame=document.querySelector('iframe'), results=document.querySelector('#results');
+const singleJob=new URLSearchParams(location.search).get('profile')==='single-job';
+const expectedJobs=singleJob?6:18, completedPerQueue=singleJob?'2':'6';
 let passed=0,failed=0, errors=[];
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 async function until(predicate) {
@@ -13,7 +15,7 @@ async function check(name,fn) {
 const assert=(x,message)=>{if(!x)throw new Error(message);};
 const viewer=()=>frame.contentDocument?.querySelector('job-queue-timeline');
 await check('observer snapshots render through the actual Blazor circuit',async()=>{
-  await until(()=>viewer()?.shadowRoot?.querySelector('.mode')?.textContent.includes('18 jobs'));
+  await until(()=>viewer()?.shadowRoot?.querySelector('.mode')?.textContent.includes(`${expectedJobs} jobs`));
   frame.contentWindow.addEventListener('error',e=>errors.push(e.message));
   frame.contentWindow.addEventListener('unhandledrejection',e=>errors.push(String(e.reason)));
   assert(frame.contentDocument.querySelectorAll('job-queue-timeline').length===1,'one monitor');
@@ -23,7 +25,7 @@ await check('real channel values and selection round trip',async()=>{
   // Finite timer arrivals can expose all jobs while the last roots are still queued.
   // A queued job has no channel until Started; select after real execution completes.
   await until(()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
-    .filter(q=>q.dataset.completed==='6').length===3);
+    .filter(q=>q.dataset.completed===completedPerQueue).length===3);
   const v=viewer(),input=v.shadowRoot.querySelector('input[type=search]');
   input.value='measurements';input.dispatchEvent(new Event('input',{bubbles:true}));
   const result=await until(()=>v.shadowRoot.querySelector('.results button'));
@@ -37,12 +39,13 @@ await check('real channel values and selection round trip',async()=>{
     'real simulation membership reaches browser selection');
   // The same selected job can also have an Unassigned enqueue-history marker.
   const nodes=[...v.shadowRoot.querySelectorAll('.selected title')];
-  assert(nodes.some(node=>/Channel: \d/.test(node.textContent)),
+  // A selected job may be represented by a collision group at overview scale.
+  assert(nodes.some(node=>/(?:Channel: |channel )\d/.test(node.textContent)),
     `runtime channel is known; selected=${v.selectedJobId}; markers=${nodes.map(node=>node.textContent).join(' | ')}`);
 });
 await check('idle circuit and selection do not resend the projection snapshot',async()=>{
   await until(()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
-    .filter(q=>q.dataset.completed==='6').length===3);
+    .filter(q=>q.dataset.completed===completedPerQueue).length===3);
   await wait(300);
   const v=viewer(),original=v.setData;
   let updates=0;
@@ -60,7 +63,7 @@ await check('navigation away and back disposes and reconnects one wrapper',async
   frame.contentWindow.Blazor.navigateTo('/Error');
   await until(()=>!viewer());
   frame.contentWindow.Blazor.navigateTo('/');
-  await until(()=>viewer()?.shadowRoot?.querySelector('.mode')?.textContent.includes('18 jobs'));
+  await until(()=>viewer()?.shadowRoot?.querySelector('.mode')?.textContent.includes(`${expectedJobs} jobs`));
   const v=viewer(),input=v.shadowRoot.querySelector('input[type=search]');
   input.value='measurements';input.dispatchEvent(new Event('input',{bubbles:true}));
   const result=await until(()=>v.shadowRoot.querySelector('.results button'));
@@ -82,8 +85,35 @@ await check('completed snapshots retain enqueue strips and enqueue-to-start rela
     if(v.shadowRoot.querySelector('.assignment[marker-end]')) { connected=true; break; }
   }
   assert(connected,'recorded enqueue and Started positions are connected');
-  assert(v.shadowRoot.querySelector('.mode').textContent.includes('18 jobs'),'history markers do not inflate job counts');
+  assert(v.shadowRoot.querySelector('.mode').textContent.includes(`${expectedJobs} jobs`),'history markers do not inflate job counts');
   assert(errors.length===0,errors.join('; '));
+});
+if(singleJob) await check('each independent root has two positions and one identity on its runtime queue',async()=>{
+  const v=viewer(),input=v.shadowRoot.querySelector('input[type=search]');
+  input.value='Single job:';input.dispatchEvent(new Event('input',{bubbles:true}));
+  const ids=[...v.shadowRoot.querySelectorAll('.results button')].map(button=>button.dataset.result);
+  assert(new Set(ids).size===6,'six distinct one-job roots');
+  const channels=new Map();
+  for(const id of ids) {
+    let selection;
+    const listener=e=>selection=e.detail;
+    v.addEventListener('job-select',listener);
+    try { v.focusJob(id); } finally { v.removeEventListener('job-select',listener); }
+    await wait(100);
+    const markers=[...v.shadowRoot.querySelectorAll('[data-job-id]')].filter(node=>node.dataset.jobId===id);
+    assert(markers.length===2,'one enqueue and one execution position for the same job');
+    const titles=markers.map(node=>node.querySelector('title').textContent);
+    assert(titles.some(text=>text.includes('Channel: unassigned')),'enqueue history stays Unassigned');
+    const assigned=titles.find(text=>/Channel: \d/.test(text));
+    assert(assigned && assigned.includes('timestampSource: Started'),'execution uses real Started position');
+    assert(selection.rootJobId===id && selection.rootJobIds.length===1 && selection.rootJobIds[0]===id,
+      'each root has independent composition identity');
+    const queue=assigned.match(/Queue: (.+)/)[1],channel=assigned.match(/Channel: (\d+)/)[1];
+    const seen=channels.get(queue)??[];seen.push(channel);channels.set(queue,seen);
+  }
+  assert(channels.size===3,'all runtime queues inspected');
+  assert([...channels.values()].every(values=>values.length===2), 'two completed independent roots per queue');
+  assert(v.shadowRoot.querySelector('.mode').textContent.includes('6 jobs'),'twelve position markers still count six jobs');
 });
 document.querySelector('#summary').textContent=`${passed} passed; ${failed} failed`;
 document.documentElement.dataset.result=failed?'failed':'passed';

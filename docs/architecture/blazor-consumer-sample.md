@@ -67,6 +67,40 @@ Contracts remain in `TplQueue.Sample.Etl.Contracts`; timer types and live jobs
 stay internal. Delivery snapshots expose scenario IDs and accepted root IDs.
 The separate graph catalog supplies composition membership for all outcomes.
 
+### Single-job scenario (UC01)
+
+`AddSampleSingleJobSimulation()` selects three finite scenarios: `single-parallel`,
+`single-fifo` and `single-cache`. Each tick creates one independent ingest root,
+with no composed prerequisites, a fresh root/job/operation ID and the existing
+500 ms measurement-ingest handler. Cache uses the existing payload allowlist,
+serializer and registered handler. It remains process-local. No transform or load
+job is created, and the normalized measurements remain in the finite data store.
+
+The preset submits one root per tick, two ticks per queue, after one second and
+then three seconds later. Each scenario admits at most one active root. Successful
+delivery produces six roots and six unique jobs. Settings may select
+`SimulationScenarioKind.SingleJob`; the original seven-argument constructor still
+selects ETL. The existing finite stop, cancellation, failure and skip rules apply.
+
+The host selects this preset through `Simulation:Profile=single-job`; missing
+configuration selects `etl`, and unknown profile names fail at startup. See the
+[sample launch command](../../samples/TplQueue.Sample.BlazorSignalR/README.md#single-job-profile-uc01).
+The normal default ETL profile remains six three-job roots/eighteen jobs.
+No browser action selects or restarts the backend profile.
+
+UC01 acceptance uses FIFO capacity one and Parallel/Cache capacity two. Sequential
+real-queue tests submit three separate roots to inspect release and reuse of
+queue-local channels; a second arrival need not reuse the first channel on a
+multi-channel queue. Browser acceptance verifies retained enqueue and Started
+positions, one job identity/count, selection and lifecycle. FIFO may add runtime
+ordering edges between successive roots; these do not merge composed membership.
+
+A capacity-one Cache probe stalled before observer events in the current source
+baseline. It is not a supported acceptance result; investigation belongs to the
+queue dependency and is outside UC01. Use capacity two or greater for this Cache
+demonstration. No queue scheduler change is included. Exact evidence is in the
+[UC01 execution record](../development/simulation-tasks/uc01-single-job-on-each-queue.md#execution-record).
+
 ### Simulation graph identity
 
 `ISimulationGraphCatalog` exposes detached root ID lists by job ID. The module
