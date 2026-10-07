@@ -1,14 +1,24 @@
 # TplQueue Blazor ETL job monitor
 
-Passive .NET 8 Interactive Server dashboard for `TplQueue.Sample.Simulation`. The
-backend uses finite timers owned by the Simulation module: one three-job root
-per queue after one second, then one more three seconds later. This produces six
-roots and eighteen jobs independently of browsers. Each scenario admits at most
-two active roots; busy or capacity-limited ticks are counted and skipped.
-The host attaches observers before starting delivery and closes admission during
-shutdown, waiting for pending submissions. Its shutdown token cancels jobs.
-See the [finite delivery contract](../../docs/architecture/blazor-consumer-sample.md#finite-scenario-delivery)
-for configurable settings, completion semantics and failure counters.
+The .NET 8 Interactive Server host consumes TplQueue `0.2.0-preview.2` packages
+and the repository-local Domain, Contracts and Simulation projects. It no longer
+requires sibling product source or the temporary WorkspaceTplQueue Domain project.
+
+The host registers ETL and independent single-job workflows together on FIFO,
+Parallel and Cache. Two workflow timers start after one second and tick every
+three seconds. Each full pair of ticks adds six roots and twelve jobs. ETL admits
+at most two active roots per queue; SingleJob admits one. Busy or capacity-limited
+submissions are skipped. Timing is fixed in ScheduledWorkflow; the former
+Simulation:Profile and timing configuration keys are not used by this host.
+
+The host attaches observers before starting delivery. **Stop arrivals** closes
+admission across browser tabs and waits for pending submissions while accepted
+jobs finish. Host shutdown cancels the token used by jobs. Refreshing the page
+does not restart delivery; restart the server for another session. Pause freezes
+the view only. History, graph membership and business data remain in memory for
+the process lifetime; bounded retention is still future work.
+
+See the [delivery contract](../../docs/architecture/blazor-consumer-sample.md#continuous-combined-demo).
 
 The full-area `<job-queue-timeline>` Web Component displays actual logical
 execution channels, vertical time, explicit dependency edges, search, graph focus,
@@ -34,18 +44,21 @@ zoom and resizing still redraw locally; selection callbacks do not resend the
 unchanged snapshot. DTOs represent accumulated job state derived from events.
 
 Expand **U** to inspect enqueue history. Searching for a job also expands its strip
-and navigates to its execution time. The finite workload may finish before the
-browser opens; search or history navigation reveals its recorded markers.
+and navigates to its execution time. Search or history navigation reveals older
+recorded markers, including work accepted before the browser connected.
 
 See the maintained [architecture and contract guide](../../docs/architecture/blazor-consumer-sample.md)
 and [standalone component guide](../../tools/TplQueue.JobMonitor/README.md).
 
-During coordinated source development, run from `WorkspaceTplQueue`:
+From the TplQueue.Usage repository root:
 
 ```powershell
 .\build.ps1 -Configuration Debug
-dotnet run --no-build --project ..\TplQueue.Usage\samples\TplQueue.Sample.BlazorSignalR
+dotnet run --no-build --project .\samples\TplQueue.Sample.BlazorSignalR
 ```
+
+The configured feed must contain the pinned package version. See
+[local development](../../docs/development/local-development.md) for feed setup.
 
 Open `/` at the address printed by ASP.NET Core. The Debug build additionally
 provides `/job-monitor/tests/blazor.html` for interactive circuit acceptance.
@@ -55,36 +68,9 @@ SignalR hub is added.
 The build synchronizes shared JavaScript/CSS from `tools/TplQueue.JobMonitor`
 into the ignored `wwwroot/job-monitor` directory before static asset discovery;
 there is no Node build or duplicated maintained renderer.
-The sample retains sibling source references during coordinated preview work.
-Build it through `WorkspaceTplQueue.sln` for the full source reference switch.
-Package-only validation is a separate maintained workflow. A standalone rebuild
-must select a coordinated package version containing `IJobExecutionEvent`;
-the older default preview package does not contain that new optional contract.
 
-## Single-job profile (UC01)
-
-After building through `WorkspaceTplQueue`, launch this opt-in profile from that
-workspace directory:
-
-```powershell
-dotnet run --no-build --project ../TplQueue.Usage/samples/TplQueue.Sample.BlazorSignalR -- --Simulation:Profile=single-job --TplQueue:Queues:ParallelQ:MaxParallelism=2 --TplQueue:Queues:CacheQ:MaxParallelism=2
-```
-
-Each queue receives one independent ingest root after one second and another
-three seconds later: six roots, six jobs, no composed prerequisites. The handler
-takes approximately 500 ms. Each scenario admits at most one active root; the
-normal finite skip/stop rules apply. Search for `Single job:` and expand **U** to
-inspect enqueue history and the Started marker of the same job. Two position
-markers still count as one job. Channels come from runtime events; successive
-jobs can use different available channels before a released channel is reused.
-
-The default `etl` profile remains unchanged. Unknown profile names fail at
-startup. Module consumers can select `SimulationScenarioKind.SingleJob` in
-`SimulationScenarioSettings`; the original constructor continues to select ETL.
-
-Use Cache capacity two or greater for this demonstration: a capacity-one probe
-stalled in the current source baseline before emitting job events. See the
-[UC01 evidence and limitations](../../docs/development/simulation-tasks/uc01-single-job-on-each-queue.md#execution-record).
-The Debug browser harness accepts `?profile=single-job` when connected to this
-profile; it validates six jobs and both markers for every root. The query changes
-test expectations only; it does not start or configure the simulation.
+The Debug browser harness is intended for the continuous combined workload. Open
+`/job-monitor/tests/blazor.html?profile=combined`: it stops arrivals and checks
+drain, selection and multiple circuits. The query selects harness expectations,
+not a host profile. Historical finite `etl`/`single-job` host launch instructions
+no longer apply. HTTP prerender tests do not replace interactive circuit checks.

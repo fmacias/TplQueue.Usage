@@ -47,11 +47,14 @@ If no argument is provided, the sample defaults to `all`.
 
 ## Feed and restore model
 
-This project uses package references only.
+This project uses the shared TplQueuePackageVersion, defaulting to `0.2.0-preview.2`.
 
 It is restored through the `TplQueue.Usage/NuGet.config` file, which points to:
 
-- the sibling local feed `..\TplQueue.NugetLocal`
-- `nuget.org` as the secondary source
+- LocalPackages (`..\TplQueue.NugetLocal`, relative to the repository's config file)
+- nuget.org
+
+See [feed setup and local refresh](../../docs/development/local-development.md);
+source order does not establish precedence.
 
 That keeps the smoke surface representative of real package consumption instead of private project-reference composition.

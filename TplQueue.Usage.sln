@@ -19,6 +19,25 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TplQueue.Sample.Simulation"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Fmacias.TplQueue.Usage.Integration.Test", "test\integration\Fmacias.TplQueue.Usage.Integration.Test\Fmacias.TplQueue.Usage.Integration.Test.csproj", "{0B860717-E895-74CA-4F8C-A7583B029CE1}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Root", "Root", "{AF2D35C2-06F1-40D0-95B0-2A997C860BAA}"
+	ProjectSection(SolutionItems) = preProject
+		AGENTS.md = AGENTS.md
+		AGENTS_RULES.md = AGENTS_RULES.md
+		build.ps1 = build.ps1
+		coverage-baseline.json = coverage-baseline.json
+		coverage.ps1 = coverage.ps1
+		coverage.runsettings = coverage.runsettings
+		CurrentIssue.md = CurrentIssue.md
+		Directory.Build.props = Directory.Build.props
+		Directory.Build.targets = Directory.Build.targets
+		LICENSE = LICENSE
+		NuGet.config = NuGet.config
+		README.md = README.md
+		test.ps1 = test.ps1
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TplQueue.Sample.Domain", "samples\TplQueue.Sample.Domain\TplQueue.Sample.Domain.csproj", "{F7048C23-2924-8BC7-9291-3BAC337A921D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -113,6 +132,18 @@ Global
 		{0B860717-E895-74CA-4F8C-A7583B029CE1}.Release|x64.Build.0 = Release|Any CPU
 		{0B860717-E895-74CA-4F8C-A7583B029CE1}.Release|x86.ActiveCfg = Release|Any CPU
 		{0B860717-E895-74CA-4F8C-A7583B029CE1}.Release|x86.Build.0 = Release|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Debug|x64.Build.0 = Debug|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Debug|x86.Build.0 = Debug|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Release|x64.ActiveCfg = Release|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Release|x64.Build.0 = Release|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Release|x86.ActiveCfg = Release|Any CPU
+		{F7048C23-2924-8BC7-9291-3BAC337A921D}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -125,6 +156,7 @@ Global
 		{E6718719-384B-4518-A430-814C0FD9B048} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 		{43843F17-5FDB-46EA-8D11-47BCE52079F6} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 		{0B860717-E895-74CA-4F8C-A7583B029CE1} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
+		{F7048C23-2924-8BC7-9291-3BAC337A921D} = {5D20AA90-6969-D8BD-9DCD-8634F4692FDA}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {728A4680-D784-4C15-8630-376E6F52A72B}

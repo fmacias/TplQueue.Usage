@@ -5,8 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\TplQueue.Adapter\src\Fmacias.TplQueue.Microsoft.DependencyInjection\Fmacias.TplQueue.Microsoft.DependencyInjection.csproj" />
-    <ProjectReference Include="..\..\..\TplQueue.Core\src\Fmacias.TplQueue.Core\Fmacias.TplQueue.Core.csproj" />
+    <ProjectReference Include="..\TplQueue.Sample.Domain\TplQueue.Sample.Domain.csproj" />
     <ProjectReference Include="..\TplQueue.Sample.Etl.Contracts\TplQueue.Sample.Etl.Contracts.csproj" />
     <ProjectReference Include="..\TplQueue.Sample.Simulation\TplQueue.Sample.Simulation.csproj" />
   </ItemGroup>
@@ -14,6 +13,8 @@
     <Content Remove="wwwroot\job-monitor\**\*" />
     <_JobMonitorSource Include="..\..\tools\TplQueue.JobMonitor\src\**\*" Destination="wwwroot\job-monitor\src\%(RecursiveDir)%(Filename)%(Extension)" />
     <_JobMonitorSource Include="..\..\tools\TplQueue.JobMonitor\integrations\blazor\**\*" Destination="wwwroot\job-monitor\integrations\blazor\%(RecursiveDir)%(Filename)%(Extension)" />
+    <PackageReference Include="Fmacias.TplQueue.Core" Version="$(TplQueuePackageVersion)" />
+    <PackageReference Include="Fmacias.TplQueue.Microsoft.DependencyInjection" Version="$(TplQueuePackageVersion)" />
     <_JobMonitorSource Include="..\..\tools\TplQueue.JobMonitor\LICENSE" Destination="wwwroot\job-monitor\LICENSE" />
   </ItemGroup>
   <ItemDefinitionGroup>

@@ -1,69 +1,106 @@
-using System.Reflection;
 using Fmacias.TplQueue.Contracts;
 using Microsoft.Extensions.Logging.Abstractions;
 using TplQueue.Sample.BlazorSignalR.Application;
 using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
 using TplQueue.Sample.Etl.Contracts;
+using TplQueue.Sample.Simulation.Session;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
 
 [TestFixture]
 public sealed class SimulationHostedServiceTests
 {
-    [Test]
-    public async Task Host_AttachesAllObserversBeforeStartAndRetainsThemUntilStopFinishes()
+    [TestCase(false, false)]
+    [TestCase(true, false)]
+    [TestCase(false, true)]
+    public async Task Host_AttachesBeforePollingAndStopsWorkflowsBeforeUnsubscribing(
+        bool failPolling, bool failWorkflowStart)
     {
         // Arrange
-        var fifo = DispatchProxy.Create<IFifoQ, EtlQueueRuntimeCancellationCleanupTests.QueueProxy>();
-        var parallel = DispatchProxy.Create<IParallelQ, EtlQueueRuntimeCancellationCleanupTests.QueueProxy>();
-        var cache = DispatchProxy.Create<ICacheQ, EtlQueueRuntimeCancellationCleanupTests.QueueProxy>();
-        var proxies = new[] { (object)fifo, parallel, cache }
-            .Cast<EtlQueueRuntimeCancellationCleanupTests.QueueProxy>().ToArray();
-        var simulation = new RecordingSimulation(() => proxies.All(queue => queue.ActiveSubscriptions == 1));
-        var catalog = new EtlQueueCatalog(new[]
+        var calls = new List<string>();
+        var runtime = new RecordingRuntime(calls, failPolling);
+        var first = new RecordingWorkflow("first", calls, false);
+        var second = new RecordingWorkflow("second", calls, failWorkflowStart);
+        var store = new EtlExecutionProjectionStore(new EtlQueueCatalog(new[]
         {
-            new EtlQueueDescriptor(AvailableQueue.FIFO, fifo.QueueId, "fifo", "FIFO", 0)
-        });
-        var observer = new EtlQueueObserver(new EtlExecutionProjectionStore(catalog,
-            NullLogger<EtlExecutionProjectionStore>.Instance), NullLogger<EtlQueueObserver>.Instance);
-        using var host = new SampleEtlDemoHostedService(simulation, fifo, parallel, cache,
-            observer, NullLogger<SampleEtlDemoHostedService>.Instance);
+            new EtlQueueDescriptor(AvailableQueue.FIFO, Guid.NewGuid(), "fifo", "FIFO", 0)
+        }), NullLogger<EtlExecutionProjectionStore>.Instance);
+        var observer = new EtlQueueObserver(store, NullLogger<EtlQueueObserver>.Instance);
+        var simulation = new SimulationService(new[] { first, second }, runtime);
+        using var host = new SampleEtlDemoHostedService(simulation, observer,
+            NullLogger<SampleEtlDemoHostedService>.Instance);
 
         // Act
-        await host.StartAsync(CancellationToken.None);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        await host.StopAsync(timeout.Token);
+        if (failPolling || failWorkflowStart)
+            Assert.ThrowsAsync<InvalidOperationException>(() => host.StartAsync(CancellationToken.None));
+        else
+        {
+            await host.StartAsync(CancellationToken.None);
+            await host.StopAsync(CancellationToken.None);
+        }
 
         // Assert
-        Assert.Multiple(() =>
-        {
-            Assert.That(simulation.StartCalls, Is.EqualTo(1));
-            Assert.That(simulation.AttachedAtStart, Is.True);
-            Assert.That(simulation.AttachedAtStop, Is.True);
-            Assert.That(simulation.Token.IsCancellationRequested, Is.True);
-            Assert.That(proxies.Select(queue => queue.ActiveSubscriptions), Is.All.Zero);
-        });
+        var expected = new List<string> { "subscribe", "resume" };
+        if (!failPolling) expected.AddRange(new[] { "start first", "start second" });
+        expected.AddRange(new[] { "stop first", "stop second", "unsubscribe" });
+        Assert.That(calls, Is.EqualTo(expected));
+        Assert.That(first.Completion.IsCompletedSuccessfully, Is.True);
+        Assert.That(second.Completion.IsCompletedSuccessfully, Is.True);
     }
 
-    private sealed class RecordingSimulation(Func<bool> observersAttached) : ISimulationService
+    [Test]
+    public void Constructor_RejectsMissingSimulation()
     {
-        public int StartCalls { get; private set; }
-        public bool AttachedAtStart { get; private set; }
-        public bool AttachedAtStop { get; private set; }
-        public CancellationToken Token { get; private set; }
-        public Task Completion => Task.CompletedTask;
+        // Act / Assert
+        Assert.That(() => new SampleEtlDemoHostedService(null!, null!, null!),
+            Throws.ArgumentNullException);
+    }
+
+    private sealed class RecordingRuntime(List<string> calls, bool failPolling) : IEtlQueueRuntime
+    {
+        public IQ GetQueue(AvailableQueue queue) => throw new NotSupportedException();
+        public IDisposable Subscribe(IObserver<IJobEvent> observer)
+        {
+            calls.Add("subscribe");
+            return new Subscription(calls);
+        }
+        public void ResumePolling()
+        {
+            calls.Add("resume");
+            if (failPolling) throw new InvalidOperationException("Expected polling failure.");
+        }
+
+        public void Enqueue<TPayload>(AvailableQueue availableQueue, IDataJobRoot<TPayload> root, CancellationToken cancellationToken) where TPayload : IPayload
+        {
+            throw new NotImplementedException();
+        }
+
+        public bool IsActive(Guid rootJobId)
+        {
+            throw new NotImplementedException();
+        }
+
+        private sealed class Subscription(List<string> calls) : IDisposable
+        {
+            public void Dispose() => calls.Add("unsubscribe");
+        }
+    }
+
+    private sealed class RecordingWorkflow(string name, List<string> calls, bool failStart) : ISimulationWorkflow
+    {
+        private readonly TaskCompletionSource<bool> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public Task Completion => _completion.Task;
         public void Start(CancellationToken cancellationToken)
         {
-            StartCalls++;
-            Token = cancellationToken;
-            AttachedAtStart = observersAttached();
+            calls.Add("start " + name);
+            if (failStart) throw new InvalidOperationException("Expected workflow startup failure.");
         }
         public Task StopAsync()
         {
-            AttachedAtStop = observersAttached();
-            return Task.CompletedTask;
+            calls.Add("stop " + name);
+            _completion.TrySetResult(true);
+            return Completion;
         }
-        public IReadOnlyList<ScenarioDeliverySnapshot> GetSnapshot() => Array.Empty<ScenarioDeliverySnapshot>();
-        public void Dispose() { }
+        public ScenarioDeliverySnapshot GetSnapshot() => new(name, 0, 0, 0, null, Array.Empty<Guid>());
     }
 }

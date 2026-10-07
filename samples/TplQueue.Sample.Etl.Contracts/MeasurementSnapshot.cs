@@ -2,6 +2,8 @@ using System;
 
 namespace TplQueue.Sample.Etl.Contracts
 {
+
+    //REVIEW I think that MeasurementSnapshot should be a record type, but I am leaving it as a class for now to avoid breaking changes. If we change it to a record, we can remove the constructor and use the compiler-generated one instead.
     /// <summary>
     /// Represents an immutable measurement value persisted with an ETL payload.
     /// </summary>

@@ -13,8 +13,9 @@ The implementation belongs in `samples/TplQueue.Sample.Simulation`, renamed from
 `TplQueue.Sample.Etl` in P01. Add contracts to `samples/TplQueue.Sample.Etl.Contracts`
 when required. Renaming the contracts project has not been decided.
 
-Blazor owns host composition, observer projection and presentation. The simulation
-owns scenarios, graph construction, handlers, delivery scheduling and run control.
+Blazor owns host composition, observer projection and presentation. Domain owns
+graph construction, payloads, handlers and queue/cache wrappers. Simulation owns
+measurements, workflow scheduling, admission and runtime access through Contracts.
 Browser connections must not create or restart workloads.
 
 This plan and its linked task files track proposed work and acceptance evidence. The maintained
@@ -24,7 +25,16 @@ guide when implemented behavior changes; do not treat this plan as a second curr
 architecture specification. Public product documentation and publishing boundaries
 remain unchanged.
 
-## Observed baseline
+## Current package migration (2026-10-06)
+
+The current implementation consumes TplQueue `0.2.0-preview.2` packages and keeps
+Domain inside Usage. ETL and SingleJob run continuously with one timer per workflow;
+the host registers both and uses fixed timing. Finite settings and profile selectors
+have been removed. P00-P03/UC01 records retain their historical completion evidence;
+they are not launch instructions or fresh acceptance evidence for this migration.
+The broader UC23/UC25 lifecycle and retention work remains pending.
+
+## Observed baseline (historical, before P02)
 
 - The host attaches observers, waits one second, and submits two three-job roots
   to each of FIFO, Parallel and Cache: six roots and eighteen jobs, once at startup.
@@ -51,9 +61,9 @@ remain unchanged.
 Relevant maintained sources:
 
 - [Hosted workload](../../samples/TplQueue.Sample.BlazorSignalR/Application/SampleEtlDemoHostedService.cs)
-- [ETL workflow](../../samples/TplQueue.Sample.Simulation/EtlWorkflow.cs)
-- [Workflow contract](../../samples/TplQueue.Sample.Etl.Contracts/IEtlWorkflow.cs)
-- [Queue runtime](../../samples/TplQueue.Sample.Simulation/Runtime/EtlQueueRuntime.cs)
+- [ETL workflow](../../samples/TplQueue.Sample.Simulation/Workflows/Etl/EtlSimulationWorkflow.cs)
+- [Workflow contract](../../samples/TplQueue.Sample.Etl.Contracts/ISimulationWorkflow.cs)
+- [Queue runtime](../../samples/TplQueue.Sample.Simulation/Execution/EtlQueueRuntime.cs)
 - [Projection](../../samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/EtlExecutionProjectionStore.cs)
 - [Monitor behavior and bounds](../../tools/TplQueue.JobMonitor/README.md)
 
@@ -63,20 +73,20 @@ The normal graph limits below were confirmed by the human during P00 on 2026-09-
 They are scenario limits, not measured performance limits. Other proposals remain
 deferred until their dependent task; do not treat them as accepted defaults.
 
-| Decision | Proposal | Status |
-| --- | --- | --- |
-| Default graph size | 15 unique jobs including the root | Accepted by human, 2026-09-23 (P00) |
-| Normal maximum | 50 unique jobs per root | Accepted by human, 2026-09-23 (P00) |
-| Normal graph depth | At most 8 levels on the longest dependency path, counting the root as one level | Accepted by human, 2026-09-23 (P00) |
-| Readable branching | Usually 2-4 branches | Deferred to UC06; proposal only |
-| Tighter alternative | Default 10 jobs, maximum 30 | Not selected; 15/50 accepted |
-| Stress profile | 100-500 jobs, explicitly enabled and bounded | Deferred to UC20; proposal only |
-| Standard delivery | One root every 3 seconds | Implemented in P02; see execution record |
-| Independent arrivals | Queue/scenario intervals of 2, 3 and 5 seconds | Deferred to UC09; preset to validate |
-| Burst delivery | Five small roots every 10 seconds | Deferred to UC19; preset to validate |
-| Shared-root representation | One job ID, all dependency edges and rootJobIds; root ID identifies the current one-root run | Implemented in P03 |
-| Continuous retention | Bound completed history and event fingerprints while retaining active graphs and their dependencies | Resolve before UC25 |
-| Project rename | Implementation becomes `TplQueue.Sample.Simulation`; contracts name remains unchanged until decided | Complete, 2026-09-24 (P01) |
+| Decision                   | Proposal                                                                                            | Status                                   |
+| -------------------------- | --------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Default graph size         | 15 unique jobs including the root                                                                   | Accepted by human, 2026-09-23 (P00)      |
+| Normal maximum             | 50 unique jobs per root                                                                             | Accepted by human, 2026-09-23 (P00)      |
+| Normal graph depth         | At most 8 levels on the longest dependency path, counting the root as one level                     | Accepted by human, 2026-09-23 (P00)      |
+| Readable branching         | Usually 2-4 branches                                                                                | Deferred to UC06; proposal only          |
+| Tighter alternative        | Default 10 jobs, maximum 30                                                                         | Not selected; 15/50 accepted             |
+| Stress profile             | 100-500 jobs, explicitly enabled and bounded                                                        | Deferred to UC20; proposal only          |
+| Standard delivery          | One root every 3 seconds                                                                            | Implemented in P02; see execution record |
+| Independent arrivals       | Queue/scenario intervals of 2, 3 and 5 seconds                                                      | Deferred to UC09; preset to validate     |
+| Burst delivery             | Five small roots every 10 seconds                                                                   | Deferred to UC19; preset to validate     |
+| Shared-root representation | One job ID, all dependency edges and rootJobIds; root ID identifies the current one-root run     | Implemented in P03                      |
+| Continuous retention       | Bound completed history and event fingerprints while retaining active graphs and their dependencies | Resolve before UC25                      |
+| Project rename             | Implementation becomes `TplQueue.Sample.Simulation`; contracts name remains unchanged until decided | Complete, 2026-09-24 (P01)               |
 
 See the [P00 execution record](simulation-tasks/p00-record-decisions-and-establish-baseline.md#execution-record)
 for reference modes, retained tests, exact validation results and baseline limitations.
@@ -217,7 +227,7 @@ From `TplQueue.Usage`, the repository commands are `./build.ps1 -Configuration D
 `./test.ps1 -Configuration Debug`, and `./coverage.ps1 -EnforceBaseline` as applicable.
 The test script also builds samples; record that when describing execution order.
 
-For the current coordinated source layout, the documented workspace entry point
+For optional maintainer source validation, the documented workspace entry point
 from `WorkspaceTplQueue` is `./build.ps1 -Configuration Debug -RunTests`. Inspect
 its current options to split build/unit/package/integration phases when needed.
 Packing uses the maintained workspace `pack.ps1` or applicable product

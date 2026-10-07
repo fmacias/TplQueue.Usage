@@ -6,6 +6,7 @@ using global::Fmacias.TplQueue;
 using Microsoft.Extensions.DependencyInjection;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Composition;
+using TplQueue.Sample.Domain.Composition;
 using TplQueue.Sample.Simulation.Runtime;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
@@ -28,21 +29,24 @@ public sealed class SimulationQueueIntegrationTests
         services.AddSingleton(api.SystemTextSerializerFactory());
         services.AddTransient<ISystemTextJsonUniversalSerializer>(sp =>
             sp.GetRequiredService<ISystemTextJsonSerializerFactory>().Serializer(new JsonSerializerOptions()));
+        services.AddSampleDomain();
         services.AddSampleEtlWorkflow();
         using var provider = services.BuildServiceProvider();
         provider.RegisterSampleEtlPayloadHandlers();
-        var simulation = provider.GetRequiredService<ISimulationService>();
-        var runtime = provider.GetRequiredService<EtlQueueRuntime>();
+        var simulation = provider.GetServices<ISimulationWorkflow>().Single();
+        var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
         var observer = new RecordingObserver();
-        using var fifo = provider.GetRequiredService<IFifoQ>().Subscribe(observer);
-        using var parallel = provider.GetRequiredService<IParallelQ>().Subscribe(observer);
-        using var cache = provider.GetRequiredService<ICacheQ>().Subscribe(observer);
+        using var subscription = runtime.Subscribe(observer);
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(20));
-        Assert.That(simulation.GetSnapshot().SelectMany(item => item.RootIds), Is.Empty);
+        Assert.That(simulation.GetSnapshot().RootIds, Is.Empty);
 
         // Act
+        runtime.ResumePolling();
         simulation.Start(cancellation.Token);
         Assert.That(() => simulation.Start(cancellation.Token), Throws.InvalidOperationException);
+        while (simulation.GetSnapshot().RootIds.Count < 6)
+            await Task.Delay(10, cancellation.Token);
+        await simulation.StopAsync();
         await simulation.Completion.WaitAsync(TimeSpan.FromSeconds(15));
         await observer.Completed.Task.WaitAsync(TimeSpan.FromSeconds(15));
         await simulation.StopAsync();
@@ -51,21 +55,20 @@ public sealed class SimulationQueueIntegrationTests
         // Assert: terminal cleanup also releases scenario admission, including cache-rehydrated roots.
         Assert.Multiple(() =>
         {
-            Assert.That(snapshot, Has.Count.EqualTo(3));
-            Assert.That(snapshot.Select(item => item.Ticks), Is.All.EqualTo(2));
-            Assert.That(snapshot.Select(item => item.RootIds.Count), Is.All.EqualTo(2));
-            Assert.That(snapshot.Select(item => item.FailedTicks + item.SkippedTicks), Is.All.Zero);
-            Assert.That(snapshot.SelectMany(item => item.RootIds).Distinct().Count(), Is.EqualTo(6));
+            Assert.That(snapshot.ScenarioId, Is.EqualTo("etl"));
+            Assert.That(snapshot.Ticks, Is.EqualTo(2));
+            Assert.That(snapshot.RootIds, Has.Count.EqualTo(6));
+            Assert.That(snapshot.FailedTicks + snapshot.SkippedTicks, Is.Zero);
+            Assert.That(snapshot.RootIds.Distinct().Count(), Is.EqualTo(6));
             Assert.That(observer.Jobs.Count, Is.EqualTo(18));
             Assert.That(observer.Roots.Count, Is.EqualTo(6));
             Assert.That(observer.Errors, Is.Empty);
         });
         // Runtime and test observers dispatch independently; wait for cleanup rather than assume their order.
         using var cleanupTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-        while (snapshot.SelectMany(item => item.RootIds).Any(runtime.IsActive))
+        while (snapshot.RootIds.Any(runtime.IsActive))
             await Task.Delay(10, cleanupTimeout.Token);
-        simulation.Dispose();
-        Assert.That(() => simulation.Start(CancellationToken.None), Throws.TypeOf<ObjectDisposedException>());
+        Assert.That(() => simulation.Start(CancellationToken.None), Throws.InvalidOperationException);
     }
 
     private sealed class RecordingObserver : IObserver<IJobEvent>

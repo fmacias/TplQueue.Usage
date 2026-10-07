@@ -2,9 +2,25 @@
 @rendermode InteractiveServer
 @implements IDisposable
 @inject IEtlExecutionProjectionStore ProjectionStore
+@inject ISimulationService Simulation
+@inject ILogger<Dashboard> Logger
 
 <PageTitle>TplQueue job monitor</PageTitle>
-<header class="dashboard-heading"><h1>TplQueue <span>Job monitor</span></h1><span>Passive observer view</span></header>
+<header class="dashboard-heading">
+    <h1>TplQueue <span>Job monitor</span></h1>
+    <div class="simulation-controls">
+        <span role="status" data-arrivals-state="@(_arrivalsStopped ? "stopped" : "running")">
+            @(_arrivalsStopped ? "Arrivals stopped. Accepted jobs can finish." : "New jobs arrive automatically.")
+        </span>
+        <button type="button" data-stop-arrivals disabled="@(_stopping || _arrivalsStopped)" @onclick="StopArrivalsAsync">
+            @(_stopping ? "Stopping arrivals…" : "Stop arrivals")
+        </button>
+    </div>
+</header>
+@if (_stopError != null)
+{
+    <p role="alert">@_stopError</p>
+}
 <section class="monitor-host" aria-label="ETL execution timeline">
     <JobMonitor Snapshot="_snapshot" JobSelected="OnJobSelected" />
 </section>
@@ -21,11 +37,55 @@
     private Guid? _selectedJobId;
     private volatile bool _disposed;
     private int _refreshPending;
+    private readonly CancellationTokenSource _viewLifetime = new();
+    private bool _stopping, _arrivalsStopped;
+    private string? _stopError;
 
     protected override void OnInitialized()
     {
         ProjectionStore.Changed += OnProjectionChanged;
         Refresh();
+        _arrivalsStopped = Simulation.Completion.IsCompleted;
+        _ = ObserveDeliveryCompletionAsync();
+    }
+
+    private async Task StopArrivalsAsync()
+    {
+        if (_stopping || _arrivalsStopped) return;
+        _stopping = true;
+        _stopError = null;
+        try
+        {
+            await Simulation.StopAsync();
+            _arrivalsStopped = true;
+        }
+        catch (Exception error)
+        {
+            Logger.LogError(error, "Stopping simulation arrivals failed.");
+            _stopError = "Could not stop arrivals. Please try again.";
+        }
+        finally { _stopping = false; }
+    }
+
+    // Completion notifies every connected circuit, including stops requested by another browser.
+    private async Task ObserveDeliveryCompletionAsync()
+    {
+        try
+        {
+            await Simulation.Completion.WaitAsync(_viewLifetime.Token);
+            if (_disposed) return;
+            await InvokeAsync(() =>
+            {
+                if (_disposed) return;
+                _arrivalsStopped = true;
+                StateHasChanged();
+            });
+        }
+        catch (OperationCanceledException) when (_disposed) { }
+        catch (Exception error)
+        {
+            Logger.LogError(error, "Observing simulation completion failed.");
+        }
     }
 
     private void Refresh()
@@ -51,7 +111,10 @@
 
     public void Dispose()
     {
+        if (_disposed) return;
         _disposed = true;
+        _viewLifetime.Cancel();
+        _viewLifetime.Dispose();
         ProjectionStore.Changed -= OnProjectionChanged;
     }
 }

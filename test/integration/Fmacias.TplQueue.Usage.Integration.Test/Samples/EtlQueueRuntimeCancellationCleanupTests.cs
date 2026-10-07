@@ -12,7 +12,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using TplQueue.Sample.Simulation.Composition;
 using TplQueue.Sample.Etl.Contracts;
-using TplQueue.Sample.Etl.Contracts.Dto;
+using TplQueue.Sample.Domain.Composition;
+using TplQueue.Sample.Simulation.Runtime;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples
 {
@@ -26,7 +27,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             JobEventStatus terminalStatus)
         {
             using var provider = CreateServiceProvider(out var cacheQueueProxy);
-            var workflow = provider.GetRequiredService<IEtlWorkflow>();
+            var workflow = provider.GetRequiredService<TestWorkflow>();
             cacheQueueProxy.TerminalStatus = terminalStatus;
 
             var rootJobId = EnqueueCacheRoot(workflow);
@@ -42,7 +43,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
         public void CacheEnqueueFailure_ReleasesCancellationBeforeRethrowing()
         {
             using var provider = CreateServiceProvider(out var cacheQueueProxy);
-            var workflow = provider.GetRequiredService<IEtlWorkflow>();
+            var workflow = provider.GetRequiredService<TestWorkflow>();
             cacheQueueProxy.EnqueueException =
                 new InvalidOperationException("Simulated cache enqueue failure.");
 
@@ -67,8 +68,8 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             bool useAssemblyQualifiedName)
         {
             using var provider = CreateServiceProvider(out var cacheQueueProxy);
-            var workflow = provider.GetRequiredService<IEtlWorkflow>();
-            var resolver = provider.GetRequiredService<ITypeResolver>();
+            var workflow = provider.GetRequiredService<TestWorkflow>();
+            var resolver = provider.GetRequiredService<ICacheTypeResolver>();
             var serializer =
                 provider.GetRequiredService<ISystemTextJsonUniversalSerializer>();
 
@@ -106,11 +107,11 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
 
             Assert.Multiple(() =>
             {
-                Assert.That(workflow.GetType().Assembly.GetName().Name,
-                    Is.EqualTo("TplQueue.Sample.Simulation"));
+                Assert.That(hydratedTypes.Select(type => type.Assembly.GetName().Name),
+                    Is.All.EqualTo("TplQueue.Sample.Domain"));
                 Assert.That(hydratedTypes.Select(type => type.Namespace),
-                    Is.All.EqualTo("TplQueue.Sample.Simulation.Payloads"));
-                Assert.That(typeof(IEtlWorkflow).Assembly.GetName().Name,
+                    Is.All.EqualTo("TplQueue.Sample.Domain.Payloads"));
+                Assert.That(typeof(ISampleJobFactory).Assembly.GetName().Name,
                     Is.EqualTo("TplQueue.Sample.Etl.Contracts"));
                 Assert.That(
                     hydratedTypes,
@@ -154,6 +155,12 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 serviceProvider => serviceProvider
                     .GetRequiredService<ISystemTextJsonSerializerFactory>()
                     .Serializer(new JsonSerializerOptions()));
+            services.AddSampleDomain();
+            var wrappers = new TestQueues(fifoQueue, parallelQueue, cacheQueue);
+            services.AddSingleton<ISampleFifoQ>(wrappers);
+            services.AddSingleton<ISampleParallelQ>(wrappers);
+            services.AddSingleton<ISampleCacheQ>(wrappers);
+            services.AddSingleton<TestWorkflow>();
             services.AddSingleton<IFifoQ>(fifoQueue);
             services.AddSingleton<IParallelQ>(parallelQueue);
             services.AddSingleton<ICacheQ>(cacheQueue);
@@ -161,7 +168,36 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             return services.BuildServiceProvider();
         }
 
-        private static Guid EnqueueCacheRoot(IEtlWorkflow workflow)
+        // Adapt the retained cleanup/hydration tests to the extracted Domain factory and runtime.
+        private sealed class TestWorkflow
+        {
+            private readonly ISampleJobFactory _factory;
+            private readonly IEtlQueueRuntime _runtime;
+            public TestWorkflow(ISampleJobFactory factory, IEtlQueueRuntime runtime)
+            {
+                _factory = factory;
+                _runtime = runtime;
+            }
+            public Guid EnqueueMeasurements(AvailableQueue queue,
+                IReadOnlyList<LegacyMeasurement> measurements, CancellationToken cancellationToken)
+            {
+                var root = _factory.LoadMeasurementsJobRoot(measurements);
+                _runtime.Enqueue(queue, root, cancellationToken);
+                return root.Id;
+            }
+            public bool Cancel(Guid rootId) => ((EtlQueueRuntime)_runtime).Cancel(rootId);
+        }
+
+        private sealed class TestQueues(IFifoQ fifo, IParallelQ parallel, ICacheQ cache)
+            : ISampleFifoQ, ISampleParallelQ, ISampleCacheQ
+        {
+            public IFifoQ InnerFifoQ => fifo;
+            public IParallelQ InnerParallelQ => parallel;
+            public ICacheQ InnerCacheQ => cache;
+            public void Dispose() { fifo.Dispose(); parallel.Dispose(); cache.Dispose(); }
+        }
+
+        private static Guid EnqueueCacheRoot(TestWorkflow workflow)
         {
             return workflow.EnqueueMeasurements(
                 AvailableQueue.Cache,

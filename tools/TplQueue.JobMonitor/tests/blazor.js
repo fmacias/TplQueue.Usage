@@ -1,10 +1,12 @@
 const frame=document.querySelector('iframe'), results=document.querySelector('#results');
 const singleJob=new URLSearchParams(location.search).get('profile')==='single-job';
-const expectedJobs=singleJob?6:18, completedPerQueue=singleJob?'2':'6';
+const combined=new URLSearchParams(location.search).get('profile')==='combined';
+let expectedJobs=singleJob?6:18;
+const completedPerQueue=singleJob?'2':'6';
 let passed=0,failed=0, errors=[];
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
-async function until(predicate) {
-  for(let i=0;i<100;i++) { const value=predicate(); if(value) return value; await wait(100); }
+async function until(predicate,timeoutMs=10000) {
+  for(let i=0;i<timeoutMs/100;i++) { const value=predicate(); if(value) return value; await wait(100); }
   throw new Error(`Timed out waiting for the interactive Blazor circuit; Blazor=${typeof frame.contentWindow?.Blazor}; viewer=${!!viewer()}; shadow=${!!viewer()?.shadowRoot}; page=${frame.contentDocument?.body?.innerText?.slice(0, 300)}`);
 }
 async function check(name,fn) {
@@ -14,6 +16,36 @@ async function check(name,fn) {
 }
 const assert=(x,message)=>{if(!x)throw new Error(message);};
 const viewer=()=>frame.contentDocument?.querySelector('job-queue-timeline');
+const queuesComplete=()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
+  .filter(q=>combined ? Number(q.dataset.total)>0 && q.dataset.completed===q.dataset.total
+    : q.dataset.completed===completedPerQueue).length===3;
+if(combined) await check('both workloads keep arriving until Stop; accepted jobs drain and other circuits observe stop',async()=>{
+  await until(()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
+    .filter(q=>Number(q.dataset.completed)>=12).length===3,30000);
+  // Wait for another arrival so Stop is exercised while real jobs are still executing.
+  await until(()=>[...frame.contentDocument.querySelectorAll('[data-total]')]
+    .some(q=>Number(q.dataset.total)>Number(q.dataset.completed)));
+  const peer=document.createElement('iframe');peer.src='/';peer.title='Second simulation observer';
+  document.body.append(peer);
+  try {
+    await until(()=>peer.contentDocument?.querySelector('[data-stop-arrivals]:not(:disabled)'));
+    frame.contentDocument.querySelector('[data-stop-arrivals]').click();
+    await until(()=>frame.contentDocument.querySelector('[data-arrivals-state="stopped"]'));
+    await until(()=>peer.contentDocument.querySelector('[data-arrivals-state="stopped"]'));
+    await until(queuesComplete);
+    const totals=()=>[...frame.contentDocument.querySelectorAll('[data-total]')]
+      .map(q=>Number(q.dataset.total));
+    const stoppedTotals=totals();expectedJobs=stoppedTotals.reduce((sum,count)=>sum+count,0);
+    await wait(3400);
+    assert(JSON.stringify(totals())===JSON.stringify(stoppedTotals),'no new accepted jobs after stop');
+    assert(frame.contentDocument.querySelector('[data-stop-arrivals]').disabled,'stop is idempotently disabled');
+    const input=viewer().shadowRoot.querySelector('input[type=search]');
+    for(const name of ['Single job:', 'Load measurement summary']) {
+      input.value=name;input.dispatchEvent(new Event('input',{bubbles:true}));
+      assert(viewer().shadowRoot.querySelector('.results button'),`${name} appears in the combined workload`);
+    }
+  } finally { peer.remove(); }
+});
 await check('observer snapshots render through the actual Blazor circuit',async()=>{
   await until(()=>viewer()?.shadowRoot?.querySelector('.mode')?.textContent.includes(`${expectedJobs} jobs`));
   frame.contentWindow.addEventListener('error',e=>errors.push(e.message));
@@ -24,8 +56,7 @@ await check('observer snapshots render through the actual Blazor circuit',async(
 await check('real channel values and selection round trip',async()=>{
   // Finite timer arrivals can expose all jobs while the last roots are still queued.
   // A queued job has no channel until Started; select after real execution completes.
-  await until(()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
-    .filter(q=>q.dataset.completed===completedPerQueue).length===3);
+  await until(queuesComplete);
   const v=viewer(),input=v.shadowRoot.querySelector('input[type=search]');
   input.value='measurements';input.dispatchEvent(new Event('input',{bubbles:true}));
   const result=await until(()=>v.shadowRoot.querySelector('.results button'));
@@ -44,8 +75,7 @@ await check('real channel values and selection round trip',async()=>{
     `runtime channel is known; selected=${v.selectedJobId}; markers=${nodes.map(node=>node.textContent).join(' | ')}`);
 });
 await check('idle circuit and selection do not resend the projection snapshot',async()=>{
-  await until(()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
-    .filter(q=>q.dataset.completed===completedPerQueue).length===3);
+  await until(queuesComplete);
   await wait(300);
   const v=viewer(),original=v.setData;
   let updates=0;

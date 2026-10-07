@@ -1,6 +1,6 @@
 using System;
 
-namespace TplQueue.Sample.Etl.Contracts.Dto
+namespace TplQueue.Sample.Etl.Contracts
 {
     /// <summary>
     /// Consumer-owned measurement model implementing the shared ETL input 

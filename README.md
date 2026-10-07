@@ -40,12 +40,19 @@ These samples are the canonical runnable examples cited by the product-repositor
 
 The Blazor sample uses the reusable `job-queue-timeline` Web Component with real runtime execution channels, vertical time, and a full-area viewer without a permanent details panel. See the maintained architecture guide for contracts and validation.
 The component's five-second overview uses exact square position markers, a left UTC ruler and compact channels. Dense jobs use count markers with temporary closer inspection in the same viewer.
-The Simulation module owns finite ETL delivery: two timer ticks per queue,
-one root per tick, a one-second startup offset and a three-second interval.
-The host attaches observers before starting the simulation; browser connections
-do not start or restart it. See [delivery settings and lifecycle](docs/architecture/blazor-consumer-sample.md#finite-scenario-delivery).
-An opt-in `single-job` profile submits one independent ingest root per queue per
-tick, six one-job roots in total. See the [UC01 profile and launch command](samples/TplQueue.Sample.BlazorSignalR/README.md#single-job-profile-uc01).
+The Simulation module runs ETL and independent single-job scenarios together by
+default, starting after one second and repeating every three seconds. **Stop
+arrivals** closes admission across all browser tabs while accepted jobs finish.
+The host starts delivery; opening a browser never starts or restarts it.
+ETL and SingleJob share `ISimulationWorkflow`, with a `System.Threading.Timer`
+owned by each workflow instance. Simulation folders separate workflows,
+measurements, session lifecycle, execution and graph tracking. Domain owns job
+factories, payloads, handlers and queue/cache wrappers under `samples/TplQueue.Sample.Domain`.
+See [workflow structure](docs/architecture/blazor-consumer-sample.md#workflow-structure).
+The host registers both workflows directly; timing is fixed and finite host profiles
+are no longer available.
+See [continuous delivery and controls](docs/architecture/blazor-consumer-sample.md#continuous-combined-demo)
+and the [sample launch instructions](samples/TplQueue.Sample.BlazorSignalR/README.md).
 Graph membership is captured before enqueue, so running, failed and cancelled jobs
 retain their root identity. Shared jobs keep all root memberships and one job ID;
 see [graph identity](docs/architecture/blazor-consumer-sample.md#simulation-graph-identity).
@@ -54,14 +61,14 @@ After its initial snapshot, the Blazor monitor refreshes data when new observer 
 
 ## Public package consumption
 
-The published preview line is consumable directly from `nuget.org`. Public documentation and sample guidance should assume the normal package-install path first, for example:
+Samples and integration tests use TplQueue `0.2.0-preview.2` by default. The
+Blazor host uses the Core and DI packages, Domain uses MemCache, and Contracts uses
+Abstractions. Simulation references Contracts; all sample source projects live here.
 
-```powershell
-dotnet add package Fmacias.TplQueue --version 0.1.0-preview.1
-dotnet add package Fmacias.TplQueue.Core --version 0.1.0-preview.1
-```
-
-The sibling `..\TplQueue.NugetLocal` feed is only a maintainer and local-preview convenience for workspace development.
+Restore uses [NuGet.config](NuGet.config), which enables nuget.org and a local
+preview feed at `..\TplQueue.NugetLocal`, relative to this repository. Pushing source commits
+does not itself publish packages. See [local development](docs/development/local-development.md)
+for package availability and repeated local rebuilds.
 
 ## Quick operations
 
@@ -84,7 +91,9 @@ Run the coverage gate:
 .\coverage.ps1 -EnforceBaseline
 ```
 
-The default local preview line is controlled by `TplQueuePackageVersion` in [Directory.Build.props](Directory.Build.props). Override it at command time when needed:
+`TplQueuePackageVersion` in [Directory.Build.props](Directory.Build.props) controls
+the shared package version. All TplQueue PackageReference entries use this property.
+To validate another available package build without changing the default:
 
 ```powershell
 .\build.ps1 -TplQueuePackageVersion <version>
@@ -93,18 +102,17 @@ The default local preview line is controlled by `TplQueuePackageVersion` in [Dir
 
 ## Public boundary
 
-`TplQueue.Usage` is intentionally public-facing.
+Domain, Simulation and Contracts are repository-local sample projects. A standalone
+Usage build consumes product packages and does not require private Core source or
+the temporary WorkspaceTplQueue Domain checkout used before this migration.
 
-- the projects consume published packages instead of private `TplQueue.Core` source projects
-- temporary exception: while `TPLQ-V1-015A` advances the package version, the
-  `TplQueue.Sample.BlazorSignalR` host and its `TplQueue.Sample.Simulation` module use source project
-  references to the sibling Adapter and Core repositories; this is a deliberate
-  upgrade workflow, not the published consumer model
-- when loaded through `WorkspaceTplQueue.sln`, workspace targets also switch the
-  loaded Usage integration and console validation projects to sibling source
-  references; other standalone Usage projects remain package-based
-- the public consumption path is `nuget.org`; `..\TplQueue.NugetLocal` is only for local preview and maintainer workflows
-- restricted source access remains outside this repository and is documented in [docs/architecture/source-access-boundary.md](docs/architecture/source-access-boundary.md)
+- `TplQueue.Adapter/docs/<lang>/` remains the public product-documentation and site-sync source.
+- WorkspaceTplQueue can still switch selected loaded Usage projects to sibling source
+  references for maintainer development; validate packages through the standalone Usage scripts.
+- The local preview feed is a maintainer convenience. Published packages can be restored
+  from nuget.org when the requested version is available there.
+- Restricted source access remains outside this repository; see the
+  [source-access boundary](docs/architecture/source-access-boundary.md).
 
 ## License
 

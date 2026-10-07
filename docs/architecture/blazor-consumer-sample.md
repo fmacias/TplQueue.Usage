@@ -7,99 +7,115 @@ under [tools/TplQueue.JobMonitor](../../tools/TplQueue.JobMonitor/README.md).
 
 ## Current host and ownership
 
-The implementation project and namespaces are `TplQueue.Sample.Simulation`
-(formerly `TplQueue.Sample.Etl`). The contracts project and namespaces remain
-`TplQueue.Sample.Etl.Contracts`; `IEtlWorkflow` and `AddSampleEtlWorkflow` retain
-their names. Existing consumers of implementation namespaces must rebuild with
-the new references. Cache payload type names follow the renamed assembly and
-namespace; the sample uses process-local memory, with no persisted cache migration.
+The standalone Usage solution consumes TplQueue `0.2.0-preview.2` NuGet packages.
+Domain now lives in `samples/TplQueue.Sample.Domain` inside this repository; a
+sibling product or WorkspaceTplQueue checkout is not required to build the sample.
+See [local development](../development/local-development.md) for feed setup.
 
-The sample is a passive .NET 8 Interactive Server application. C# owns queue
-configuration, payloads, handlers, retries, graph topology and materialized state.
-The hosted service attaches all observers before starting `ISimulationService`,
-then adapts application shutdown to that service. The Simulation module owns
-measurement collection, scenario orchestration and finite timer delivery.
-Browser connections do not start workloads.
-The built-in Blazor circuit carries updates; there is no application REST API,
-OpenAPI document or custom dashboard SignalR hub.
+| Project | Responsibility and dependencies |
+| --- | --- |
+| `TplQueue.Sample.Etl.Contracts` | Sample interfaces and immutable DTOs; references the Abstractions package |
+| `TplQueue.Sample.Domain` | Job factories, payloads, handlers, queue/cache wrappers and business data; references Contracts and the MemCache package |
+| `TplQueue.Sample.Simulation` | Measurements, scheduling, admission, graph membership and runtime access; references Contracts, without a Domain source dependency |
+| `TplQueue.Sample.BlazorSignalR` | .NET 8 Interactive Server host, composition, observer projection and presentation; references the three local sample projects plus Core and DI packages |
+
+`Program.cs` calls `AddTplQueue`, `AddSampleDomain`, `AddSampleEtlWorkflow`,
+`AddSampleSingleJobSimulation` and `AddMeasurementEtlConsumer`. After building the
+host, it calls `RegisterSampleEtlPayloadHandlers`. These existing composition
+entry points define the current application setup.
+
+Domain registers transient queue/cache wrappers and singleton business data and
+job-factory services. The singleton `IEtlQueueRuntime` captures one set of wrappers;
+the dashboard catalog and observers obtain those same queues through the runtime.
+They do not resolve another set of transient wrappers. Queue option names remain
+`FifoQ`, `ParallelQ` and `CacheQ`. Payloads are internal implementations with public
+constructors for System.Text.Json hydration and an explicit type allowlist.
+
+Factory overloads copy caller-supplied measurements into immutable payloads. The
+host's measurement source supplies the workflow batches. Domain is sample code,
+not a product package or a new documentation publishing source. Adapter's language
+trees remain the public product-documentation source.
+
+The hosted service subscribes before resuming polling and starting workflows.
+Browser connections do not start workloads. The built-in Blazor circuit carries
+updates; there is no application REST API, OpenAPI document or custom dashboard hub.
+
+### Workflow structure
+
+ETL and SingleJob implement `ISimulationWorkflow` through `ScheduledWorkflow`.
+Each workflow owns one `System.Threading.Timer` and attempts a submission to each
+of the three queues per tick. The normal host therefore owns two workflow timers.
+`ISimulationService` coordinates Start, StopAsync, Completion and detached snapshots.
+Neither workflow nor session contract implements IDisposable; the host awaits
+StopAsync during shutdown. The runtime separately owns queue and subscription cleanup.
+
+| Simulation folder | Responsibility |
+| --- | --- |
+| `Workflows/Etl`, `Workflows/SingleJob` | Request Domain graphs through `ISampleJobFactory` and submit them |
+| `Workflows/ScheduledWorkflow.cs` | Timer ownership, per-queue admission and aggregate delivery counters |
+| `Measurements` | Supply measurement batches through `IMeasurementSource` |
+| `Session` | Coordinate the registered workflows |
+| `Execution` | Queue access, submission, subscriptions and root cancellation tracking |
+| `Graphs` | Retain composed graph membership independently of execution outcomes |
+| `Composition` | Register Simulation services and the chosen workflow types |
+
+The old finite delivery, scenario settings, `IEtlWorkflow` and scenario classes
+have been removed from the current sample. They are not retained under a runtime
+`Legacy/` folder. The test-only legacy ScatterChart mapper is a separate retained artifact.
+
+### Continuous combined demo
+
+The host registers both workflows directly. Timing is fixed in ScheduledWorkflow:
+one second before the first tick and three seconds between ticks. There is no
+`Simulation:Profile`, `Simulation:IntervalSeconds` or `Simulation:StartupOffsetSeconds`
+selection in the current host. Passing those arguments does not configure delivery.
+
+Each full pair of ticks submits three ETL roots and three independent ingest roots:
+six roots and twelve jobs. ETL permits two active roots per queue; SingleJob permits
+one. Admission includes queued roots until the runtime observes a terminal event.
+A busy callback skips its tick. A queue at capacity is skipped while other queues
+can proceed. A submission failure is recorded without preventing attempts on the
+remaining queues. Snapshots named `etl` and `single` aggregate counters and accepted
+root IDs across the three queues. SkippedTicks and FailedTicks count affected ticks,
+not individual queue attempts. There is no catch-up backlog.
+
+**Stop arrivals** calls the singleton session's StopAsync, closes admission and
+waits for any admitted submission. It does not drain or cancel accepted jobs.
+Accepted jobs retain the host shutdown token. Completion reports that arrivals and
+submissions have stopped, not that execution, observer delivery or cache acknowledgment
+has finished. Stop is idempotent; Start is single-use. A workflow observes host
+cancellation in its timer callback, and host shutdown also explicitly awaits StopAsync.
+
+Every circuit observes Completion without polling. Navigating away or disconnecting
+cancels only that circuit's completion wait. Opening another browser cannot restart
+delivery; restart the server for a fresh session. Pause freezes only viewing time.
+
+History, event fingerprints, graph membership, accepted-root lists and business
+measurements/summaries accumulate for the process lifetime. Admission is bounded;
+retention is not. UC23's broader lifecycle work and UC25's bounded retention remain
+pending. The [continuous-demo record](../development/simulation-continuous-demo.md)
+preserves historical validation separately from the current package migration.
 
 ### Finite scenario delivery
 
-`AddSampleEtlWorkflow()` registers three scenarios, `etl-parallel`, `etl-fifo` and
-`etl-cache`. Each submits one existing three-job ETL root per tick, after a
-one-second startup offset and then at a three-second interval, for two ticks.
-The per-scenario admission bound is two active roots, including queued roots.
-With successful submissions this produces six roots and eighteen unique jobs;
-Ingest -> Transform -> Load and handler delays 500/700/400 ms are unchanged.
-The accepted 15/50-job graph defaults remain for later graph scenarios.
-
-The overload accepting `SimulationScenarioSettings` configures scenario ID,
-queue, interval, startup offset, roots per tick, finite repetitions and maximum
-active runs. Settings are immutable and validated before timer creation; scenario
-IDs must be unique. Interval is 1 through `Int32.MaxValue` milliseconds; offset
-is zero through that maximum. Zero offset schedules an asynchronous first tick
-at timer resolution. Roots per tick and repetitions are positive; the active-run
-bound must fit a complete batch.
-
-Each scenario owns one internal `System.Timers.Timer`. Its short elapsed callback
-counts a tick and schedules at most one tracked submission worker. Busy ticks or
-ticks without room for a full batch count as skipped; they consume repetitions
-and create no catch-up backlog. Admission includes previously submitted roots
-until the runtime observes their terminal outcome, including cache-rehydrated
-roots. Delayed or lost terminal observations conservatively retain capacity.
-Submission failures are observed in the worker, counted, and exposed as the last
-error message in detached `ScenarioDeliverySnapshot` values. A partially submitted
-batch retains its accepted roots; later ticks may continue. Runtime handler
-failures continue through the existing queue observer path.
-
-The lifecycle is single-use. `Start` rejects repeated starts and starts after
-stop/disposal. `StopAsync` closes admission and waits for any already-admitted
-submission; no submission remains after its returned task completes. It neither
-drains nor cancels accepted graphs. The host passes its shutdown token to the
-simulation and the graphs, preserving shutdown cancellation. `Completion` means
-finite arrivals and submissions have finished, not that graph execution, observer
-delivery or cache acknowledgment has finished. Stop/dispose ignore late callbacks;
-disposal also waits for submission work before releasing timers. Dashboard Pause
-still freezes only viewing time. Restart, explicit drain/cancel controls and
-continuous retention are deferred to their later tasks.
-
-Contracts remain in `TplQueue.Sample.Etl.Contracts`; timer types and live jobs
-stay internal. Delivery snapshots expose scenario IDs and accepted root IDs.
-The separate graph catalog supplies composition membership for all outcomes.
+This anchor is retained for earlier task links. Finite host profiles and configurable
+`SimulationScenarioSettings` belonged to the earlier implementation and are no longer
+available. Current tests stop continuous workflows explicitly after the required
+submissions. Earlier P02/UC01 execution records remain historical evidence, not
+instructions for launching the current host.
 
 ### Single-job scenario (UC01)
 
-`AddSampleSingleJobSimulation()` selects three finite scenarios: `single-parallel`,
-`single-fifo` and `single-cache`. Each tick creates one independent ingest root,
-with no composed prerequisites, a fresh root/job/operation ID and the existing
-500 ms measurement-ingest handler. Cache uses the existing payload allowlist,
-serializer and registered handler. It remains process-local. No transform or load
-job is created, and the normalized measurements remain in the finite data store.
+The SingleJob workflow submits one independent ingest root per available queue on
+each admitted tick. Each root has fresh job/operation identity and no composed
+prerequisites. It uses the same measurement source, 500 ms ingest handler and Cache
+hydration path as ETL. ETL adds Transform and Load with 700/400 ms delays.
 
-The preset submits one root per tick, two ticks per queue, after one second and
-then three seconds later. Each scenario admits at most one active root. Successful
-delivery produces six roots and six unique jobs. Settings may select
-`SimulationScenarioKind.SingleJob`; the original seven-argument constructor still
-selects ETL. The existing finite stop, cancellation, failure and skip rules apply.
-
-The host selects this preset through `Simulation:Profile=single-job`; missing
-configuration selects `etl`, and unknown profile names fail at startup. See the
-[sample launch command](../../samples/TplQueue.Sample.BlazorSignalR/README.md#single-job-profile-uc01).
-The normal default ETL profile remains six three-job roots/eighteen jobs.
-No browser action selects or restarts the backend profile.
-
-UC01 acceptance uses FIFO capacity one and Parallel/Cache capacity two. Sequential
-real-queue tests submit three separate roots to inspect release and reuse of
-queue-local channels; a second arrival need not reuse the first channel on a
-multi-channel queue. Browser acceptance verifies retained enqueue and Started
-positions, one job identity/count, selection and lifecycle. FIFO may add runtime
-ordering edges between successive roots; these do not merge composed membership.
-
-A capacity-one Cache probe stalled before observer events in the current source
-baseline. It is not a supported acceptance result; investigation belongs to the
-queue dependency and is outside UC01. Use capacity two or greater for this Cache
-demonstration. No queue scheduler change is included. Exact evidence is in the
-[UC01 execution record](../development/simulation-tasks/uc01-single-job-on-each-queue.md#execution-record).
+Both workflows run in the standard host; `Simulation:Profile=single-job` is no
+longer a supported selector. Search for `Single job:` to inspect independent roots
+alongside ETL. FIFO can add ordering edges without merging composed root memberships.
+The earlier UC01 capacity-one Cache observation is historical; it does not establish
+the behavior of a newly rebuilt package. Use current test results for acceptance.
 
 ### Simulation graph identity
 
@@ -135,7 +151,7 @@ Selecting a shared prerequisite or either connected root highlights the whole
 connected graph. FIFO ordering edges remain visible but do not merge composed run
 memberships. Root lists never choose execution channels or synthesize edges.
 Future multi-root scenario IDs and bounded continuous retention require their
-own acceptance tasks; this finite catalog is process-local and not restart-durable.
+own acceptance tasks; this catalog is process-local and not restart-durable.
 
 ```text
 queue execution capacity and lifecycle snapshots
@@ -271,10 +287,11 @@ it is not part of the host or its browser contract.
 
 ## Validation
 
-Use repository build/test scripts; workspace source validation is:
+From the TplQueue.Usage repository root, validate package consumption with:
 
 ```powershell
-.\build.ps1 -Configuration Debug -RunTests
+.\build.ps1 -Configuration Debug
+.\test.ps1 -Configuration Debug
 ```
 
 From `tools/TplQueue.JobMonitor`:
@@ -286,7 +303,7 @@ node demo/server.mjs
 ```
 
 The standalone browser harness is `/tests/browser.html` on the demo server.
-The Debug Blazor host serves `/job-monitor/tests/blazor.html` for actual circuit,
+The Debug Blazor host serves `/job-monitor/tests/blazor.html?profile=combined` for actual circuit,
 channel/selection and navigation/disposal acceptance; it is excluded from publish.
 HTTP prerender smoke tests alone do not establish interactive browser behavior.
 Report exact commands, results and any unverified acceptance separately.
@@ -294,13 +311,15 @@ Report exact commands, results and any unverified acceptance separately.
 Channel tests cover concurrent uniqueness, range, stability, release after
 completion/failure/cancellation, FIFO zero and independent queues. Projection
 tests cover nullable legacy channels, late-event enrichment, invalid channels,
-detached snapshots and presentation-only serialization. Existing tests are retained.
+detached snapshots and presentation-only serialization. Tests follow the current
+Domain/Simulation interfaces; historical finite-profile tests are not current
+acceptance evidence.
 
 ## Remaining boundaries and future work
 
 CacheQ here uses process-local memory, hydration and registered handlers; it is
 not a durable spool or replayable event log. Projection retention is currently
-unbounded for the finite demo; a continuous production stream needs explicit
+unbounded for the process session; a continuous production stream needs explicit
 retention and snapshot sizing. Observer delivery remains asynchronous and
 best-effort. WaitAsync does not wait for observers or cache acknowledgment.
 
@@ -312,10 +331,10 @@ architecture solely because earlier sketches mentioned them.
 
 The sample guide belongs to public Usage. Public product documentation and site
 synchronization continue to use `TplQueue.Adapter/docs/<lang>/`; private Core
-implementation documentation stays in Core. Workspace project-reference switching
-is intentional. The Blazor/ETL path retains its documented sibling-source preview
-exception. Package consumption is validated separately through coordinated
-workspace packing into `../TplQueue.NugetLocal`; never use `_local-packages`.
+implementation documentation stays in Core. Standalone Usage builds use package
+references. Loading selected projects through WorkspaceTplQueue can still activate
+its development-time source-reference switch; that does not prove package consumption.
+Local preview packages belong in `../TplQueue.NugetLocal`, never `_local-packages`.
 
 ## ScatterChart frontend intent
 

@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Text.Json;
 using Fmacias.TplQueue.Contracts;
 using Fmacias.TplQueue.Core;
@@ -9,123 +9,69 @@ using Microsoft.Extensions.Logging.Abstractions;
 using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Composition;
-using TplQueue.Sample.Simulation.Handlers;
-using TplQueue.Sample.Simulation.Payloads;
-using TplQueue.Sample.Simulation.Runtime;
-using TplQueue.Sample.Simulation.Scenarios;
+using TplQueue.Sample.Domain.Composition;
+using TplQueue.Sample.Domain.Handlers;
+using TplQueue.Sample.Domain.Payloads;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
 
 [TestFixture]
 public sealed class SingleJobSimulationTests
 {
-    [TestCase(AvailableQueue.FIFO)]
-    [TestCase(AvailableQueue.Parallel)]
-    [TestCase(AvailableQueue.Cache)]
-    public async Task IndependentRoot_ExecutesOnce_AndLaterRootReusesReleasedChannel(AvailableQueue queue)
+    [Test]
+    public void DomainQueues_AreSharedWithTheRuntimeAndRetainConfiguredNamesAndCapacity()
     {
-        // Arrange: real queues, payload serialization and handler; a decorator counts actual invocations.
+        // Arrange / Act
         using var context = new Context();
-        var scenario = context.Provider.GetRequiredService<SingleJobScenario>();
-        using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        var provider = context.Provider;
+        var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
 
-        // Act: finish each root before submitting the next; observer completion is a separate barrier.
-        var first = scenario.Run(queue, cancellation.Token);
-        await context.Observer.Completion(first).WaitAsync(cancellation.Token);
-        await context.Queues.Single(q => q.QueueId == context.Observer.Events.First(e => e.JobInfo.Id == first).JobInfo.CrossQueueId)
-            .WaitAsync().WaitAsync(cancellation.Token);
-        var firstSnapshot = JobMonitorMapper.Map(context.Store.GetSnapshot());
-        var second = scenario.Run(queue, cancellation.Token);
-        await context.Observer.Completion(second).WaitAsync(cancellation.Token);
-        await context.Queues.Single(q => q.QueueId == context.Observer.Events.First(e => e.JobInfo.Id == second).JobInfo.CrossQueueId)
-            .WaitAsync().WaitAsync(cancellation.Token);
-        var third = scenario.Run(queue, cancellation.Token);
-        await context.Observer.Completion(third).WaitAsync(cancellation.Token);
-
-        // Assert: one job per run, event-owned placement and independent membership even with FIFO ordering edges.
-        Assert.That(firstSnapshot.Jobs, Has.Count.EqualTo(1));
-        Assert.That(firstSnapshot.Jobs.Single().DependsOn, Is.Empty);
-        Assert.That(second, Is.Not.EqualTo(first));
-        var snapshot = JobMonitorMapper.Map(context.Store.GetSnapshot());
-        Assert.That(snapshot.Jobs, Has.Count.EqualTo(3));
-        var starts = new List<IJobEvent>();
-        foreach (var id in new[] { first, second, third })
+        // Assert
+        Assert.Multiple(() =>
         {
-            var events = context.Observer.Events.Where(e => e.JobInfo.Id == id).ToArray();
-            var start = events.Single(e => e.Status == JobEventStatus.Started);
-            var enqueued = events.Single(e => e.Status == JobEventStatus.Enqueued);
-            var job = snapshot.Jobs.Single(j => j.Id == id.ToString());
-            starts.Add(start);
-            Assert.Multiple(() =>
-            {
-                Assert.That(context.Calls[id], Is.EqualTo(1), "actual handler invocation, including cache hydration");
-                Assert.That(events.Count(e => e.Status == JobEventStatus.RootSuccessed), Is.EqualTo(1));
-                Assert.That(events.Any(e => e.Status is JobEventStatus.Failed or JobEventStatus.Canceled), Is.False);
-                Assert.That(((IJobExecutionEvent)enqueued).ExecutionChannel, Is.Null);
-                Assert.That(job.Channel, Is.EqualTo(((IJobExecutionEvent)start).ExecutionChannel));
-                Assert.That(job.Channel, Is.GreaterThanOrEqualTo(0));
-                Assert.That(job.EnqueuedAt, Is.EqualTo(new DateTimeOffset(enqueued.Timestamp)));
-                Assert.That(job.ObservedAt, Is.EqualTo(new DateTimeOffset(start.Timestamp)));
-                Assert.That(job.State, Is.EqualTo("completed"));
-                Assert.That(job.IsRoot, Is.True);
-                Assert.That(job.RootJobIds, Is.EqualTo(new[] { id.ToString() }));
-                Assert.That(context.Provider.GetRequiredService<EtlExecutionDataStore>().TryGetMeasurements(id, out _), Is.True);
-            });
-        }
-        Assert.That(((IJobExecutionEvent)starts[2]).ExecutionChannel,
-            Is.EqualTo(((IJobExecutionEvent)starts[0]).ExecutionChannel));
-        Assert.That(starts[2].Timestamp, Is.GreaterThanOrEqualTo(context.Observer.Events.Single(e =>
-            e.JobInfo.Id == first && e.Status == JobEventStatus.RootSuccessed).Timestamp));
+            Assert.That(runtime.GetQueue(AvailableQueue.FIFO), Is.SameAs(context.Queues[0]));
+            Assert.That(runtime.GetQueue(AvailableQueue.Parallel), Is.SameAs(context.Queues[1]));
+            Assert.That(runtime.GetQueue(AvailableQueue.Cache), Is.SameAs(context.Queues[2]));
+            Assert.That(runtime.GetQueue(AvailableQueue.Parallel).Name, Is.EqualTo("ParallelQ"));
+            Assert.That(runtime.GetQueue(AvailableQueue.Parallel).MaxParallelism, Is.EqualTo(2));
+            Assert.That(runtime.GetQueue(AvailableQueue.Cache).MaxParallelism, Is.EqualTo(2));
+            Assert.That(context.Queues.Select(queue => queue.QueueId).Distinct().Count(), Is.EqualTo(3));
+            Assert.That(provider.GetRequiredService<ISampleCache>().Cache,
+                Is.Not.SameAs(provider.GetRequiredService<ISampleCache>().Cache));
+        });
     }
 
     [Test]
-    public async Task SingleJobPreset_DeliversSixIndependentJobsThroughFiniteTimers()
+    public async Task SingleJobWorkflows_DeliverIndependentJobsUntilStopped()
     {
         // Arrange
         using var context = new Context();
-        var simulation = context.Provider.GetRequiredService<ISimulationService>();
+        var simulation = context.Provider.GetServices<ISimulationWorkflow>().Single();
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
         // Act
         simulation.Start(cancellation.Token);
+        while (simulation.GetSnapshot().RootIds.Count < 6)
+            await Task.Delay(10, cancellation.Token);
+        await simulation.StopAsync();
         await simulation.Completion.WaitAsync(cancellation.Token);
         var delivery = simulation.GetSnapshot();
-        await Task.WhenAll(delivery.SelectMany(s => s.RootIds).Select(context.Observer.Completion))
+        await Task.WhenAll(delivery.RootIds.Select(context.Observer.Completion))
             .WaitAsync(cancellation.Token);
         await simulation.StopAsync();
 
         // Assert
         Assert.Multiple(() =>
         {
-            Assert.That(delivery, Has.Count.EqualTo(3));
-            Assert.That(delivery.Select(s => s.RootIds.Count), Is.All.EqualTo(2));
-            Assert.That(delivery.Select(s => s.Ticks), Is.All.EqualTo(2));
-            Assert.That(delivery.Select(s => s.SkippedTicks + s.FailedTicks), Is.All.Zero);
+            Assert.That(delivery.ScenarioId, Is.EqualTo("single"));
+            Assert.That(delivery.RootIds, Has.Count.EqualTo(6));
+            Assert.That(delivery.RootIds.Distinct().Count(), Is.EqualTo(6));
+            Assert.That(delivery.Ticks, Is.EqualTo(2));
+            Assert.That(delivery.SkippedTicks + delivery.FailedTicks, Is.Zero);
             Assert.That(context.Calls.Count, Is.EqualTo(6));
             Assert.That(context.Calls.Values, Is.All.EqualTo(1));
             Assert.That(JobMonitorMapper.Map(context.Store.GetSnapshot()).Jobs, Has.Count.EqualTo(6));
         });
-    }
-
-    [Test]
-    public void InvalidKindOrQueueAndPreCancelledSubmission_DoNotCreateJobs()
-    {
-        // Arrange
-        using var context = new Context();
-        var scenario = context.Provider.GetRequiredService<SingleJobScenario>();
-
-        // Act / Assert
-        Assert.That(() => new SimulationScenarioSettings("invalid", AvailableQueue.FIFO,
-            TimeSpan.FromSeconds(3), TimeSpan.Zero, 1, 1, 1, (SimulationScenarioKind)99),
-            Throws.TypeOf<ArgumentOutOfRangeException>());
-        Assert.That(new SimulationScenarioSettings("legacy", AvailableQueue.FIFO,
-            TimeSpan.FromSeconds(3), TimeSpan.Zero, 1, 1, 1).Kind, Is.EqualTo(SimulationScenarioKind.Etl));
-        Assert.That(() => scenario.Run((AvailableQueue)99, CancellationToken.None),
-            Throws.TypeOf<ArgumentOutOfRangeException>());
-        Assert.That(() => scenario.Run(AvailableQueue.Cache, new CancellationToken(true)),
-            Throws.TypeOf<OperationCanceledException>());
-        Assert.That(context.Calls, Is.Empty);
-        Assert.That(context.Observer.Events, Is.Empty);
     }
 
     private sealed class Context : IDisposable
@@ -154,17 +100,21 @@ public sealed class SingleJobSimulationTests
             services.AddSingleton(api.SystemTextSerializerFactory());
             services.AddTransient<ISystemTextJsonUniversalSerializer>(sp =>
                 sp.GetRequiredService<ISystemTextJsonSerializerFactory>().Serializer(new JsonSerializerOptions()));
+            services.AddSampleDomain();
             services.AddSampleSingleJobSimulation();
             Provider = services.BuildServiceProvider();
             api.RegisterPayloadHandler(IngestMeasurementsPayload.HandlerId,
-                new CountingHandler(Provider.GetRequiredService<IngestMeasurementsHandler>(), Calls));
-            Queues = new IQ[] { Provider.GetRequiredService<IFifoQ>(), Provider.GetRequiredService<IParallelQ>(),
-                Provider.GetRequiredService<ICacheQ>() };
+                new CountingHandler(IngestMeasurementsHandler.Create(
+                    Provider.GetRequiredService<IEtlExecutionDataStore>(),
+                    NullLogger<IngestMeasurementsHandler>.Instance), Calls));
+            var runtime = Provider.GetRequiredService<IEtlQueueRuntime>();
+            Queues = Enum.GetValues<AvailableQueue>().Select(runtime.GetQueue).ToArray();
             Store = new EtlExecutionProjectionStore(new EtlQueueCatalog(Queues.Select((q, i) =>
                 new EtlQueueDescriptor((AvailableQueue)i, q.QueueId, q.QueueId.ToString(), q.Name, i, q.MaxParallelism)).ToArray()),
                 NullLogger<EtlExecutionProjectionStore>.Instance, Provider.GetRequiredService<ISimulationGraphCatalog>());
             Observer = new RecordingObserver(Store);
-            _subscription = Provider.GetRequiredService<EtlQueueRuntime>().Subscribe(Observer);
+            _subscription = runtime.Subscribe(Observer);
+            runtime.ResumePolling();
         }
 
         public void Dispose() { _subscription.Dispose(); Provider.Dispose(); }

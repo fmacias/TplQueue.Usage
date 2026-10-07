@@ -61,21 +61,32 @@ If a step cannot be executed, state that clearly.
 
 ## Sample architecture and host profiles
 
-The implementation module is `samples/TplQueue.Sample.Simulation`; its contracts
-remain in `samples/TplQueue.Sample.Etl.Contracts`. Preserve ETL workflow/handler
-names and behavior until a task explicitly changes them.
+Keep Domain under `samples/TplQueue.Sample.Domain`: it owns jobs, payloads, handlers,
+queue/cache wrappers and business data. Public interfaces remain in ETL Contracts.
+Simulation references Contracts, not Domain; it owns measurements, workflows,
+submission, graph tracking and the shared runtime. The Blazor host composes these
+modules. Preserve the existing component composition methods and service lifetimes.
+
+The active ETL and SingleJob workflows implement ISimulationWorkflow through
+Workflows/ScheduledWorkflow.cs. Each owns one timer that attempts all three queues.
+Timing is fixed at a one-second offset and three-second interval. StopAsync owns
+timer cleanup; neither ISimulationWorkflow nor ISimulationService is IDisposable.
+The hosted service awaits StopAsync; runtime disposal owns its queues and subscriptions.
+The old finite settings, IEtlWorkflow and legacy scenario implementations were removed.
+
+Domain wrappers are transient. The singleton IEtlQueueRuntime captures the queue
+instances used for submission; observers and the dashboard catalog must obtain
+those same instances from that runtime. Do not resolve new wrappers for monitoring.
 
 Read [Blazor frontend architecture and contract ownership](docs/architecture/blazor-consumer-sample.md)
-before modifying `samples/TplQueue.Sample.BlazorSignalR` or its ETL integration.
-That document consolidates the current architecture, generated-code policy,
-alignment findings, and suggestions. Do not duplicate it in another design guide.
+before modifying the host or its ETL integration. Keep this as the maintained guide.
 
 ### Current Blazor profile
 
-- The sample is a passive .NET 8 Interactive Server dashboard; its hosted workload runs independently of browsers.
-- The Simulation module owns scenario collection and finite `System.Timers.Timer` delivery. Keep the host as observer/lifecycle adapter. Defaults are one root per tick, two ticks per queue, one-second offset, three-second interval and two active roots per scenario. Busy/capacity ticks are skipped and counted. `StopAsync` closes admission and waits for pending submissions; the host token cancels jobs. Delivery completion is not graph drain. See the maintained architecture guide for the full contract; do not add restart or endless arrivals before their acceptance tasks.
+- Both continuous workflows are registered directly. There is no Simulation:Profile selector or configurable timing. ETL admits two active roots per queue and SingleJob one. History and business data remain process-local and unbounded; UC25 is pending.
+
+- The .NET 8 Interactive Server dashboard observes host-owned workloads and offers Stop arrivals. The host starts once, independently of browsers; the Stop button does not cancel accepted jobs or restart delivery.
 - The current frontend is `tools/TplQueue.JobMonitor`, a reusable JavaScript Web Component with a small Razor/JS snapshot bridge. ScatterChart and vis-timeline are retired.
-- UC01 adds the opt-in `single-job` host profile and `SimulationScenarioKind.SingleJob`. Each tick creates one independent ingest root with a fresh ID; the preset has two ticks per queue and one active root per scenario. Keep the default ETL profile and original settings constructor compatible. Use the maintained guide for acceptance limits, including the observed Cache capacity-one stall.
 - The full viewer uses vertical time, real logical execution channels and explicit Unassigned placement for null channels. Root identity never determines channel placement. There is no permanent details panel.
 - The overview shows five seconds ending at the bottom reference. Square centers retain exact timestamps; collisions use count markers with temporary interval inspection, never timestamp displacement. Time zoom must not widen channels. Keep the fixed left UTC ruler and keyboard access to grouped jobs.
 - Assigned positions use the backend's channel-bearing Started timestamp. Preserve observed enqueue time in the typed enqueuedAt field and metadata. Retain its marker in the collapsible Unassigned strip after assignment and draw a directed enqueue-to-start connector when both endpoints are visible. These are two positions of one job, not additional jobs or dependency relationships. Keep jobs without the channel/start pair in Unassigned; never substitute Running or terminal timestamps for channel acquisition. Search reveals the selected job's strip, including retained enqueue history.
@@ -106,10 +117,12 @@ test changed contract, projection and UI lifecycle boundaries. Do not treat HTTP
 prerender checks as interactive browser coverage. For documentation-only changes,
 check links, source claims and diffs; report that runtime tests were not run.
 
-The Blazor/ETL path currently has explicit sibling-source references during the
-preview migration. Preserve this documented exception and distinguish its
-validation from package-only consumption. Workspace project-reference switching
-remains intentional. Do not alter dependencies to satisfy a documentation task.
+The standalone samples and tests use TplQueuePackageVersion from Directory.Build.props,
+defaulting to 0.2.0-preview.2. Keep package references on that shared property so
+the build, test and coverage script overrides select a consistent package line.
+All sample projects are repository-local; the former sibling-source exception is
+removed. Workspace project-reference switching remains intentional and separate
+from standalone package validation. Do not alter dependencies for documentation alone.
 
 This public sample guide does not replace `TplQueue.Adapter/docs/<lang>/` as the
 public product-documentation source or alter site synchronization. Link to the

@@ -10,8 +10,6 @@
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="9.0.8" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\TplQueue.Abstractions\src\Fmacias.TplQueue.Abstractions.csproj" />
-    <ProjectReference Include="..\..\..\TplQueue.Adapter\src\Fmacias.TplQueue.Cache.MemCache\Fmacias.TplQueue.Cache.MemCache.csproj" />
     <ProjectReference Include="..\TplQueue.Sample.Etl.Contracts\TplQueue.Sample.Etl.Contracts.csproj" />
   </ItemGroup>
 </Project>

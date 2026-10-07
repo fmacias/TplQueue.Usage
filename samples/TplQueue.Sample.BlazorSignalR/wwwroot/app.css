@@ -4,6 +4,10 @@ main { height:100dvh; display:flex; flex-direction:column; padding:12px; }
 .dashboard-heading h1 { margin:0; font-size:17px; font-weight:600; }
 .dashboard-heading span { color:#a8abb3; font-size:13px; font-weight:400; }
 .dashboard-heading h1 span { margin-left:10px; }
+.simulation-controls { display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+.simulation-controls button { background:#333943; color:#f0f0f0; border:1px solid #747b88; border-radius:4px; padding:7px 12px; cursor:pointer; }
+.simulation-controls button:focus-visible { outline:2px solid #9cdcfe; outline-offset:3px; }
+.simulation-controls button:disabled { opacity:.6; cursor:default; }
 .monitor-host { flex:1; min-height:320px; }
 job-queue-timeline { display:block; height:100%; }
 .visually-hidden { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }

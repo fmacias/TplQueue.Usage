@@ -15,4 +15,6 @@ This section groups local-development guidance for `TplQueue.Usage`.
 .\coverage.ps1 -EnforceBaseline
 ```
 
-The current default package line is controlled through `TplQueuePackageVersion` in `Directory.Build.props`, and can be overridden at command time when you need to validate another package version.
+The shared TplQueuePackageVersion defaults to `0.2.0-preview.2`. See
+[local development](local-development.md) for feed setup, repeated package rebuilds
+and command-line version overrides.

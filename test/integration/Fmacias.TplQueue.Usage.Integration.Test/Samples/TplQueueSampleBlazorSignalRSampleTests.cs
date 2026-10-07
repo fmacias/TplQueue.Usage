@@ -8,6 +8,19 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
     [TestFixture]
     public sealed class TplQueueSampleBlazorSignalRSampleTests
     {
+        [Test]
+        public async Task DefaultDashboard_OffersStopAndContinuesBothWorkloadsBeyondTwoTicks()
+        {
+            // Arrange / Act: use the host's fixed workflow composition.
+            await using var harness = await BlazorSignalRSampleHarness.StartAsync(true);
+            var page = await harness.GetStringAsync("/");
+
+            // Assert: the server owns delivery; HTTP requests only observe it.
+            Assert.That(page, Does.Contain("data-stop-arrivals"));
+            Assert.That(page, Does.Contain("Stop arrivals"));
+            await harness.WaitForContinuousDashboardAsync();
+        }
+
         [TestCase(false)]
         [TestCase(true)]
         public async Task PassiveTimelineDashboard_IsTheOnlyApplicationSurface(bool launchFromSource)
@@ -26,7 +39,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 Assert.That(dashboardPage, Does.Contain("FifoQ"));
                 Assert.That(dashboardPage, Does.Contain("CacheQ"));
                 Assert.That(dashboardPage, Does.Contain("job-queue-timeline"));
-                Assert.That(dashboardPage, Does.Contain("Passive observer view"));
+                Assert.That(dashboardPage, Does.Contain("data-stop-arrivals"));
                 Assert.That(dashboardPage, Does.Not.Contain("ChartJS"));
                 Assert.That(dashboardPage, Does.Not.Contain("chart.umd"));
                 Assert.That(dashboardPage, Does.Not.Contain("job-details"));
@@ -99,6 +112,19 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 return _client.GetStringAsync(relativeUrl);
             }
 
+            public async Task WaitForContinuousDashboardAsync()
+            {
+                var deadline = DateTime.UtcNow.AddSeconds(25);
+                while (DateTime.UtcNow < deadline)
+                {
+                    var page = await GetStringAsync("/");
+                    var queues = Regex.Matches(page, "data-completed=\"(\\d+)\" data-total=\"(\\d+)\"");
+                    if (queues.Count == 3 && queues.All(q => int.Parse(q.Groups[1].Value) >= 12)) return;
+                    await Task.Delay(100);
+                }
+                Assert.Fail("Expected at least three ticks of ETL plus single jobs on all queues.");
+            }
+
             public async Task<string> WaitForCompletedDashboardAsync()
             {
                 var timeoutAt = DateTime.UtcNow.AddSeconds(20);
@@ -117,7 +143,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 }
 
                 Assert.Fail(
-                    "The hosted workload did not complete two three-job roots on every queue within the timeout.");
+                    "The hosted workload did not complete two rounds of ETL and single jobs on every queue within the timeout.");
                 return dashboardPage;
             }
 
@@ -224,7 +250,11 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             private static bool ContainsCompletedQueueCards(string dashboardPage)
             {
                 return new[] { "parallel", "fifo", "cache" }.All(queue =>
-                    dashboardPage.Contains($"data-queue=\"{queue}\" data-completed=\"6\" data-total=\"6\"", StringComparison.Ordinal));
+                {
+                    var card = Regex.Match(dashboardPage,
+                        $"data-queue=\"{queue}\" data-completed=\"(\\d+)\" data-total=\"(\\d+)\"");
+                    return card.Success && int.Parse(card.Groups[1].Value) >= 8;
+                });
             }
 
             private static bool HasSummaryValue(

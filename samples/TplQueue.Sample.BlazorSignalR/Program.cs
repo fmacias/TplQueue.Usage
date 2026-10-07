@@ -4,17 +4,14 @@ using Fmacias.TplQueue.Microsoft.DependencyInjection;
 using TplQueue.Sample.BlazorSignalR.Components;
 using TplQueue.Sample.BlazorSignalR.Composition;
 using TplQueue.Sample.Simulation.Composition;
+using TplQueue.Sample.Domain.Composition;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents().AddInteractiveServerComponents();
 builder.Services.AddTplQueue(builder.Configuration, CoreApi.Create());
-var simulationProfile = builder.Configuration["Simulation:Profile"] ?? "etl";
-switch (simulationProfile)
-{
-    case "etl": builder.Services.AddSampleEtlWorkflow(); break;
-    case "single-job": builder.Services.AddSampleSingleJobSimulation(); break;
-    default: throw new InvalidOperationException($"Unknown simulation profile '{simulationProfile}'. Use 'etl' or 'single-job'.");
-}
+builder.Services.AddSampleDomain();
+builder.Services.AddSampleEtlWorkflow();
+builder.Services.AddSampleSingleJobSimulation();
 builder.Services.AddMeasurementEtlConsumer();
 builder.Services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
 

@@ -1,8 +1,11 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
     <LangVersion>9.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Fmacias.TplQueue.Abstractions" Version="$(TplQueuePackageVersion)" />
+  </ItemGroup>
 </Project>

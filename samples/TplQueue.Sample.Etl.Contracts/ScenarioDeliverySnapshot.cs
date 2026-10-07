@@ -20,9 +20,9 @@ namespace TplQueue.Sample.Etl.Contracts
 
         public string ScenarioId { get; }
         public int Ticks { get; }
-        /// <summary>Gets ticks skipped while a submission was busy or a full batch exceeded admission capacity.</summary>
+        /// <summary>Gets ticks with skipped delivery because the workflow was busy or at least one queue was at capacity.</summary>
         public int SkippedTicks { get; }
-        /// <summary>Gets submission/admission failures. A partially submitted batch retains its accepted roots.</summary>
+        /// <summary>Gets ticks with at least one submission failure. Successful submissions to other queues retain their roots.</summary>
         public int FailedTicks { get; }
         public string? LastError { get; }
         public IReadOnlyList<Guid> RootIds { get; }

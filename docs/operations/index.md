@@ -10,9 +10,10 @@ This section groups repository operations for `TplQueue.Usage`.
 
 ## Local feed and release-smoke role
 
-`TplQueue.Usage` validates the current preview line from packages. During local workspace development it normally restores from:
+`TplQueue.Usage` defaults to `0.2.0-preview.2` through the shared TplQueuePackageVersion property.
+Restore uses the sources configured in NuGet.config:
 
-- `..\TplQueue.NugetLocal`
+- LocalPackages: `..\TplQueue.NugetLocal`, relative to the repository's config file
 - `nuget.org`
 
 The repository also owns the simple release-smoke consumer application:
@@ -20,3 +21,7 @@ The repository also owns the simple release-smoke consumer application:
 - [PackageConsumptionSmokeConsole](../../samples/PackageConsumptionSmokeConsole/README.md)
 
 Coverage artifacts are written under `artifacts/coverage/`, including `artifacts/coverage/html/index.html` when the standard `ReportGenerator` tool is available.
+
+See [local development](../development/local-development.md) for portable feed setup
+and repeated local rebuilds. Usage does not publish product packages or supply the
+public site tree; site synchronization remains owned by Adapter documentation.

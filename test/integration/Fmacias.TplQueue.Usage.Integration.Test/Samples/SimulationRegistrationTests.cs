@@ -1,4 +1,4 @@
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Composition;
 
@@ -7,20 +7,6 @@ namespace Fmacias.TplQueue.Integration.Test.Samples;
 [TestFixture]
 public sealed class SimulationRegistrationTests
 {
-    [Test]
-    public void WorkflowRegistration_IncludesSingleJobScenario()
-    {
-        // Arrange
-        var services = new ServiceCollection();
-
-        // Act
-        services.AddSampleEtlWorkflow();
-
-        // Assert
-        Assert.That(services.Any(item => item.ServiceType.Name == "SingleJobScenario"), Is.True,
-            "Finite delivery must support an independent one-job root without ETL dependencies.");
-    }
-
     [Test]
     public void WorkflowRegistration_IncludesGraphMembershipBeforeAnyOutcome()
     {
@@ -35,12 +21,12 @@ public sealed class SimulationRegistrationTests
         // Assert
         Assert.That(registration, Is.Not.Null,
             "Root membership must be available before successful completion.");
-        Assert.That(registration!.ServiceType.Assembly, Is.EqualTo(typeof(IEtlWorkflow).Assembly));
+        Assert.That(registration!.ServiceType.Assembly, Is.EqualTo(typeof(ISimulationWorkflow).Assembly));
         Assert.That(registration.Lifetime, Is.EqualTo(ServiceLifetime.Singleton));
     }
 
     [Test]
-    public void WorkflowRegistration_IncludesModuleOwnedSimulationLifecycle()
+    public void WorkflowRegistration_IncludesOneSingletonWorkflow()
     {
         // Arrange
         var services = new ServiceCollection();
@@ -48,34 +34,54 @@ public sealed class SimulationRegistrationTests
         // Act
         services.AddSampleEtlWorkflow();
         var registration = services.SingleOrDefault(item =>
-            item.ServiceType.Name == "ISimulationService");
+            item.ServiceType == typeof(ISimulationWorkflow));
 
         // Assert
         Assert.That(registration, Is.Not.Null,
-            "The simulation module must own finite delivery independently of the host.");
-        Assert.That(registration!.ServiceType.Assembly, Is.EqualTo(typeof(IEtlWorkflow).Assembly));
+            "The simulation module must own delivery independently of the host.");
+        Assert.That(registration!.ServiceType.Assembly, Is.EqualTo(typeof(ISimulationWorkflow).Assembly));
         Assert.That(registration.Lifetime, Is.EqualTo(ServiceLifetime.Singleton));
     }
 
     [Test]
-    public void WorkflowRegistration_RejectsMissingOrDuplicateScenariosBeforeCreatingTimers()
+    public void WorkflowRegistration_RejectsMissingServices()
     {
-        var services = new ServiceCollection();
-        var settings = new SimulationScenarioSettings("same", AvailableQueue.FIFO,
-            TimeSpan.FromSeconds(3), TimeSpan.Zero, 1, 2, 2);
-
+        // Act / Assert
         Assert.Multiple(() =>
         {
             Assert.That(() => SampleEtlServiceCollectionExtensions.AddSampleEtlWorkflow(null!),
                 Throws.ArgumentNullException);
-            Assert.That(() => services.AddSampleEtlWorkflow(null!), Throws.ArgumentNullException);
-            Assert.That(() => services.AddSampleEtlWorkflow(Array.Empty<SimulationScenarioSettings>()),
-                Throws.ArgumentException);
-            Assert.That(() => services.AddSampleEtlWorkflow(new SimulationScenarioSettings[] { null! }),
-                Throws.ArgumentException);
-            Assert.That(() => services.AddSampleEtlWorkflow(new[] { settings, settings }),
-                Throws.ArgumentException);
+            Assert.That(() => SampleEtlServiceCollectionExtensions.AddSampleSingleJobSimulation(null!),
+                Throws.ArgumentNullException);
         });
-        Assert.That(services, Is.Empty);
+    }
+
+    [Test]
+    public void CombinedRegistration_RegistersOneSingletonPerTypeWithoutDomainServices()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddSampleEtlWorkflow();
+        services.AddSampleSingleJobSimulation();
+        services.AddSampleEtlWorkflow();
+        services.AddSampleSingleJobSimulation();
+
+        // Assert
+        Assert.Multiple(() =>
+        {
+            var workflows = services.Where(item => item.ServiceType == typeof(ISimulationWorkflow)).ToArray();
+            Assert.That(workflows, Has.Length.EqualTo(2));
+            Assert.That(workflows.Select(item => item.ImplementationType).Distinct().Count(), Is.EqualTo(2));
+            Assert.That(workflows.Select(item => item.Lifetime), Is.All.EqualTo(ServiceLifetime.Singleton));
+            Assert.That(services.Count(item => item.ServiceType == typeof(ISimulationGraphCatalog)), Is.EqualTo(1));
+            Assert.That(services.Single(item => item.ServiceType == typeof(ISimulationService)).Lifetime,
+                Is.EqualTo(ServiceLifetime.Singleton));
+            Assert.That(services.Any(item => item.ServiceType == typeof(ISampleJobFactory)), Is.False);
+            Assert.That(services.Any(item => item.ServiceType == typeof(ISampleFifoQ)), Is.False);
+            Assert.That(typeof(SampleEtlServiceCollectionExtensions).Assembly.GetReferencedAssemblies()
+                .Select(assembly => assembly.Name), Does.Not.Contain("TplQueue.Sample.Domain"));
+        });
     }
 }

@@ -19,25 +19,20 @@ It exists to show how consumers use the published binaries without requiring acc
 - [samples/PackageConsumptionSmokeConsole](../samples/PackageConsumptionSmokeConsole/README.md)
 - [samples/QueueObserverConsole](../samples/QueueObserverConsole/README.md)
 - [samples/QueueObserverSignalRDashboard](../samples/QueueObserverSignalRDashboard/README.md)
-- [test/integration/Fmacias.TplQueue.Usage.Integration.Test](test/integration/Fmacias.TplQueue.Usage.Integration.Test)
+- [test/integration/Fmacias.TplQueue.Usage.Integration.Test](../test/integration/Fmacias.TplQueue.Usage.Integration.Test)
 - [consumers/README.md](../consumers/README.md)
 
 ## Package-consumption model
 
 This repository consumes `Fmacias.TplQueue` and `Fmacias.TplQueue.Core` packages instead of referencing private `TplQueue.Core` source projects.
 
-The default local preview line is controlled by `TplQueuePackageVersion` in [Directory.Build.props](../Directory.Build.props). The current local baseline is `0.1.0-preview.1`.
-
-To validate a different package line without editing the repo, override the property at build or test time:
-
-```powershell
-.\build.ps1 -TplQueuePackageVersion <version>
-.\test.ps1 -TplQueuePackageVersion <version>
-```
+Sample and integration projects use the shared TplQueuePackageVersion property,
+defaulting to `0.2.0-preview.2`. The build, test and coverage scripts accept that
+parameter to select another version. See [local development](development/local-development.md).
 
 ## Local development
 
-Local development expects the TplQueue product packages to exist in the sibling feed `..\TplQueue.NugetLocal`, with `nuget.org` retained as the secondary source. Before running this repository locally:
+Local development expects the TplQueue product packages to exist in the sibling feed `..\TplQueue.NugetLocal`, with nuget.org also enabled. The local path is relative to this repository's NuGet.config. Before running this repository locally:
 
 1. pack the current preview line from `WorkspaceTplQueue\pack.ps1` or the product-repository `pack-local.ps1` scripts
 2. restore and build `TplQueue.Usage`
@@ -68,6 +63,8 @@ More detail is in [docs/development/local-development.md](development/local-deve
 That repository license covers the consumer documentation, samples, and package-consumption test harness published here. It does not change the separate package-license terms of `TplQueue.Core`, which remain governed by the Core repository `LICENSE.txt` and the corresponding NuGet package metadata.
 
 ## Current validation surface
+
+- the [Blazor job monitor](../samples/TplQueue.Sample.BlazorSignalR/README.md), with repository-local Domain/Contracts/Simulation modules and two continuous workflows
 
 - adapted integration tests moved from `TplQueue.Core`
 - queue creation through the adapter `API` facade

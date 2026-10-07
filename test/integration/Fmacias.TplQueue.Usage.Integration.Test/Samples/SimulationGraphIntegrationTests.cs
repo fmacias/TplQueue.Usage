@@ -8,9 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
 using TplQueue.Sample.Etl.Contracts;
-using TplQueue.Sample.Etl.Contracts.Dto;
 using TplQueue.Sample.Simulation.Composition;
-using TplQueue.Sample.Simulation.Payloads;
+using TplQueue.Sample.Domain.Composition;
+using TplQueue.Sample.Domain.Payloads;
 using TplQueue.Sample.Simulation.Runtime;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
@@ -41,12 +41,12 @@ public sealed class SimulationGraphIntegrationTests
         services.AddSingleton(api.SystemTextSerializerFactory());
         services.AddTransient<ISystemTextJsonUniversalSerializer>(sp =>
             sp.GetRequiredService<ISystemTextJsonSerializerFactory>().Serializer(new JsonSerializerOptions()));
+        services.AddSampleDomain();
         services.AddSampleEtlWorkflow();
         using var provider = services.BuildServiceProvider();
-        var runtime = provider.GetRequiredService<EtlQueueRuntime>();
+        var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
         var graphs = provider.GetRequiredService<ISimulationGraphCatalog>();
-        var queues = new IQ[] { provider.GetRequiredService<IFifoQ>(), provider.GetRequiredService<IParallelQ>(),
-            provider.GetRequiredService<ICacheQ>() };
+        var queues = Enum.GetValues<AvailableQueue>().Select(runtime.GetQueue).ToArray();
         var store = new EtlExecutionProjectionStore(new EtlQueueCatalog(queues.Select((q, i) =>
             new EtlQueueDescriptor((AvailableQueue)i, q.QueueId, q.QueueId.ToString(), q.Name, i, q.MaxParallelism)).ToArray()),
             NullLogger<EtlExecutionProjectionStore>.Instance, graphs);
@@ -64,6 +64,7 @@ public sealed class SimulationGraphIntegrationTests
         try
         {
             // Act: inspect running identity before releasing the prerequisite.
+            runtime.ResumePolling();
             runtime.Enqueue(queue, root, cancellation.Token);
             await observer.Running.Task.WaitAsync(TimeSpan.FromSeconds(5));
             var running = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single(j => j.Id == child.Id.ToString());
