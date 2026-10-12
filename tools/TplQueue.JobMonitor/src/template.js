@@ -26,7 +26,8 @@
     <div class="history" tabindex="0" role="region" aria-label="Scroll execution history vertically"><div></div></div>
   </div>
   <footer><span class="mode" role="status"></span><span class="legend">W Waiting · ▶ Running · ✓ Completed · ↻ Retried · × Failed · − Cancelled</span>
-    <span>Square center = exact time · Number = grouped jobs · U = Unassigned</span></footer>
+    <span>Square center = exact time · Number = grouped jobs · U = Unassigned</span>
+    <span>Solid line = dependency · Dashed arrow = same job, enqueue → start</span></footer>
   <div class="accessible-info" role="status"></div>
 </div>`;
 

@@ -20,7 +20,7 @@ namespace TplQueue.Sample.Etl.Contracts
 
         public string ScenarioId { get; }
         public int Ticks { get; }
-        /// <summary>Gets ticks with skipped delivery because the workflow was busy or at least one queue was at capacity.</summary>
+        /// <summary>Gets overlapping timer ticks skipped while the preceding submission callback was still busy.</summary>
         public int SkippedTicks { get; }
         /// <summary>Gets ticks with at least one submission failure. Successful submissions to other queues retain their roots.</summary>
         public int FailedTicks { get; }

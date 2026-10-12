@@ -18,6 +18,67 @@ namespace Fmacias.TplQueue.Integration.Test.Samples;
 [TestFixture]
 public sealed class SimulationGraphIntegrationTests
 {
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task CacheQueue_KeepsStandaloneIngestSeparateFromEtlGraph(bool singleFirst)
+    {
+        // Arrange: both scenarios use the same ingest payload type and registered handler.
+        var api = API.Create(CoreApi.Create(), new Dictionary<string, IRetryPolicyOptions>(),
+            new Dictionary<string, IQOptions>());
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddSingleton<IApi>(api);
+        services.AddSingleton(api.DataJobFactory);
+        services.AddSingleton(api.QFactory);
+        services.AddSingleton(api.RetryPolicyAbstractFactory);
+        services.AddSingleton(api.SystemTextSerializerFactory());
+        services.AddTransient<ISystemTextJsonUniversalSerializer>(sp =>
+            sp.GetRequiredService<ISystemTextJsonSerializerFactory>().Serializer(new JsonSerializerOptions()));
+        services.AddSampleDomain();
+        services.AddSampleEtlWorkflow();
+        using var provider = services.BuildServiceProvider();
+        provider.RegisterSampleEtlPayloadHandlers();
+        var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
+        var queue = runtime.GetQueue(AvailableQueue.Cache);
+        var store = new EtlExecutionProjectionStore(new EtlQueueCatalog(new[] {
+            new EtlQueueDescriptor(AvailableQueue.Cache, queue.QueueId, queue.QueueId.ToString(),
+                queue.Name, 0, queue.MaxParallelism) }), NullLogger<EtlExecutionProjectionStore>.Instance,
+            provider.GetRequiredService<ISimulationGraphCatalog>());
+        var factory = provider.GetRequiredService<ISampleJobFactory>();
+        var single = factory.IngestMeasurementsSigleJobRoot();
+        var etl = factory.LoadMeasurementsJobRoot();
+        var transform = etl.Dependencies.Single();
+        var ingest = transform.Dependencies.Single();
+        var observer = new GraphCompletionObserver(store, single.Id, etl.Id);
+        using var subscription = runtime.Subscribe(observer);
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        Assert.That(single.Dependencies, Is.Empty);
+
+        // Act: exercise real persistence, hydration, observation and the renderer DTO boundary.
+        runtime.ResumePolling();
+        if (singleFirst) runtime.Enqueue(AvailableQueue.Cache, single, timeout.Token);
+        runtime.Enqueue(AvailableQueue.Cache, etl, timeout.Token);
+        if (!singleFirst) runtime.Enqueue(AvailableQueue.Cache, single, timeout.Token);
+        await observer.Completion.Task.WaitAsync(timeout.Token);
+        var jobs = JobMonitorMapper.Map(store.GetSnapshot()).Jobs;
+
+        // Assert: four jobs form two graphs, with exactly the two ETL dependency edges.
+        Assert.That(jobs.Select(job => job.Id), Is.EquivalentTo(new[] {
+            single.Id.ToString(), etl.Id.ToString(), transform.Id.ToString(), ingest.Id.ToString() }));
+        Assert.That(jobs.Select(job => job.State), Is.All.EqualTo("completed"));
+        var standalone = jobs.Single(job => job.Id == single.Id.ToString());
+        Assert.That(standalone.IsRoot, Is.True);
+        Assert.That(standalone.RootJobIds, Is.EqualTo(new[] { single.Id.ToString() }));
+        Assert.That(standalone.DependsOn, Is.Empty);
+        Assert.That(jobs.Where(job => job.Id != single.Id.ToString()).Select(job => job.RootJobIds),
+            Is.All.EqualTo(new[] { etl.Id.ToString() }));
+        Assert.That(jobs.Single(job => job.Id == ingest.Id.ToString()).DependsOn, Is.Empty);
+        Assert.That(jobs.Single(job => job.Id == transform.Id.ToString()).DependsOn,
+            Is.EqualTo(new[] { ingest.Id.ToString() }));
+        Assert.That(jobs.Single(job => job.Id == etl.Id.ToString()).DependsOn,
+            Is.EqualTo(new[] { transform.Id.ToString() }));
+    }
+
     [TestCase(AvailableQueue.FIFO, "completed")]
     [TestCase(AvailableQueue.Parallel, "completed")]
     [TestCase(AvailableQueue.Cache, "completed")]
@@ -83,6 +144,33 @@ public sealed class SimulationGraphIntegrationTests
             Assert.That(snapshot.Jobs.Single(j => j.Id == child.Id.ToString()).Channel, Is.EqualTo(running.Channel));
         }
         finally { handler.Release.TrySetResult(true); cancellation.Cancel(); }
+    }
+
+    private sealed class GraphCompletionObserver(EtlExecutionProjectionStore store, params Guid[] rootIds)
+        : IObserver<IJobEvent>
+    {
+        private readonly HashSet<Guid> _remaining = new(rootIds);
+        private readonly object _gate = new();
+        public TaskCompletionSource<bool> Completion { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void OnNext(IJobEvent value)
+        {
+            try
+            {
+                lock (_gate)
+                {
+                    store.Apply(value);
+                    if (value.Status is JobEventStatus.Failed or JobEventStatus.Canceled)
+                        Completion.TrySetException(new InvalidOperationException($"Unexpected {value.Status} for {value.JobInfo.Id}"));
+                    if (value.Status == JobEventStatus.RootSuccessed && _remaining.Remove(value.JobInfo.Id)
+                        && _remaining.Count == 0) Completion.TrySetResult(true);
+                }
+            }
+            catch (Exception error) { OnError(error); }
+        }
+
+        public void OnError(Exception error) => Completion.TrySetException(error);
+        public void OnCompleted() { }
     }
 
     private sealed class GatedHandler(string outcome) : IHandler

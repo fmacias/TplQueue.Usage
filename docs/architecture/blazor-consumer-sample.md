@@ -50,8 +50,10 @@ moving Domain implementations into Contracts.
 
 ### Composition and queue identity
 
-`Program.cs` calls `AddTplQueue`, `AddSampleDomain`, `AddSampleEtlWorkflow`,
-`AddSampleSingleJobSimulation` and `AddMeasurementEtlConsumer`. After building the
+`Program.cs` calls `AddTplQueue`, `AddSampleDomain`, and `AddMeasurementEtlConsumer`.
+It unconditionally registers `AddSampleEtlWorkflow`, `AddSampleSingleJobSimulation`
+and `AddSampleMultipleFifoRootsSimulation` together. Every added workflow joins
+the host without configuration flags or profile selection. After building the
 host, it calls `RegisterSampleEtlPayloadHandlers`. These existing composition
 entry points define the current application setup.
 
@@ -73,48 +75,55 @@ updates; there is no application REST API, OpenAPI document or custom dashboard 
 
 ### Workflow structure
 
-ETL and SingleJob implement `ISimulationWorkflow` through `ScheduledWorkflow`.
-Each workflow owns one `System.Threading.Timer` and attempts a submission to each
-of the three queues per tick. The normal host therefore owns two workflow timers.
+ETL, SingleJob and MultipleFifoRoots implement `ISimulationWorkflow` through
+`ScheduledWorkflow`. Each workflow owns one `System.Threading.Timer`. ETL and
+SingleJob attempt a submission to each of the three queues per tick. UC03 adds
+one FIFO-only timer, so the host starts three continuous workflow timers. Each
+Submit call requests fresh Domain jobs; no workflow replays cached job instances.
 `ISimulationService` coordinates Start, StopAsync, Completion and detached snapshots.
 Neither workflow nor session contract implements IDisposable; the host awaits
 StopAsync during shutdown. The runtime separately owns queue and subscription cleanup.
 
 | Simulation folder | Responsibility |
 | --- | --- |
-| `Workflows/Etl`, `Workflows/SingleJob` | Request Domain graphs through `ISampleJobFactory` and submit them |
-| `Workflows/ScheduledWorkflow.cs` | Timer ownership, per-queue admission and aggregate delivery counters |
+| `Workflows/Etl`, `Workflows/SingleJob`, `Workflows/MultipleFifoRoots` | Request Domain graphs through `ISampleJobFactory` and submit them |
+| `Workflows/ScheduledWorkflow.cs` | Timer ownership, queue selection, stop coordination and delivery counters |
 | `Measurements` | Supply measurement batches through `IMeasurementSource` |
 | `Session` | Coordinate the registered workflows |
 | `Execution` | Queue access, submission, subscriptions and root cancellation tracking |
 | `Graphs` | Retain composed graph membership independently of execution outcomes |
 | `Composition` | Register Simulation services and the chosen workflow types |
 
-The old finite delivery, scenario settings, `IEtlWorkflow` and scenario classes
-have been removed from the current sample. They are not retained under a runtime
+The old finite delivery profiles, scenario settings, `IEtlWorkflow` and scenario
+classes have been removed from the current sample. They are not retained under a runtime
 `Legacy/` folder. The test-only legacy ScatterChart mapper is a separate retained artifact.
 
 The [scheduled workflow](../../samples/TplQueue.Sample.Simulation/Workflows/ScheduledWorkflow.cs)
-is the extension point for recurring scenarios. Its current `Submit` hook returns
-one root ID, and its timer iterates all `AvailableQueue` values. Queue-specific
-schedules or bursts need small explicit extensions to this infrastructure and its
-admission accounting, not a second scheduler or a new workflow language.
+is the extension point for scenarios. Its `Submit` hook returns one root ID. The
+constructor accepts distinct target queues and a positive arrival interval.
+Defaults remain all queues and three seconds; the startup offset remains one second.
+Arrivals continue until StopAsync or host cancellation. There is no sample-side
+active-root cap or total root limit. Stored root IDs are delivery history, never
+cached jobs or a gate on new submissions. Execution capacity belongs to each queue.
 
 ### Continuous combined demo
 
-The host registers both workflows directly. Timing is fixed in ScheduledWorkflow:
+The host registers both continuous workflows alongside UC03. Their fixed timing is:
 one second before the first tick and three seconds between ticks. There is no
 `Simulation:Profile`, `Simulation:IntervalSeconds` or `Simulation:StartupOffsetSeconds`
 selection in the current host. Passing those arguments does not configure delivery.
 
 Each full pair of ticks submits three ETL roots and three independent ingest roots:
-six roots and twelve jobs. ETL permits two active roots per queue; SingleJob permits
-one. Admission includes queued roots until the runtime observes a terminal event.
-A busy callback skips its tick. A queue at capacity is skipped while other queues
-can proceed. A submission failure is recorded without preventing attempts on the
-remaining queues. Snapshots named `etl` and `single` aggregate counters and accepted
-root IDs across the three queues. SkippedTicks and FailedTicks count affected ticks,
-not individual queue attempts. There is no catch-up backlog.
+six roots and twelve jobs. Earlier queued/running roots do not suppress new
+submissions in any workflow. A busy submission callback still skips an overlapping
+tick; this guards callback overlap, not queue execution capacity. Submission failures
+are recorded without preventing attempts on remaining queues or later ticks.
+Snapshots aggregate accepted root IDs and counters; SkippedTicks counts callback
+overlap and FailedTicks counts affected ticks. No catch-up scheduler is added.
+UC03 continuously submits a fresh FIFO root every 100 ms, sharing FIFO capacity
+with ETL and SingleJob. Timer interleaving determines enqueue order across workflows;
+UC03 roots retain their relative submission order. FIFO's serial execution can leave
+many roots waiting, all represented through actual queue observations.
 
 **Stop arrivals** calls the singleton session's StopAsync, closes admission and
 waits for any admitted submission. It does not drain or cancel accepted jobs.
@@ -128,8 +137,8 @@ cancels only that circuit's completion wait. Opening another browser cannot rest
 delivery; restart the server for a fresh session. Pause freezes only viewing time.
 
 History, event fingerprints, graph membership, accepted-root lists and business
-measurements/summaries accumulate for the process lifetime. Admission is bounded
-per workflow and queue; retention is not. UC23 and UC25 are partially implemented:
+measurements/summaries accumulate for the process lifetime. Neither the sample's
+arrival backlog nor retention is bounded. UC23 and UC25 are partially implemented:
 broader lifecycle controls and coordinated retention remain to be added. The
 [continuous-demo record](../development/simulation-continuous-demo.md) preserves
 history separately from active specifications.
@@ -143,11 +152,42 @@ pause-arrivals/resume or a drain operation.
 
 ### Finite scenario delivery
 
-This anchor is retained for earlier task links. Finite host profiles and configurable
-`SimulationScenarioSettings` belonged to the earlier implementation and are no longer
-available. Current tests stop continuous workflows explicitly after the required
-submissions. Earlier P02/UC01 execution records remain historical evidence, not
-instructions for launching the current host.
+This anchor is retained for historical task links; all current workflows are continuous.
+The old finite host profiles and configurable `SimulationScenarioSettings` remain
+unavailable. Earlier P02/UC01 execution records are historical evidence, not launch
+instructions for the current host. Completion still means arrivals/submissions
+have stopped, not that accepted jobs or asynchronous observers have finished.
+The dashboard's arrivals state follows session Completion after Stop or shutdown.
+
+### Multiple FIFO roots (UC03)
+
+The standard host always includes `MultipleFifoRootsWorkflow`
+(`multiple-fifo-roots` in delivery snapshots) alongside ETL and SingleJob.
+Every arrival requests a fresh independent ingest root from the existing Domain
+factory through `ISampleJobFactory`. Arrivals begin after one second and continue
+at 100 ms intervals without a root-count limit or active-root cap. The existing
+500 ms ingest handler lets queued work accumulate. UC03 submits only to FIFO;
+ETL and SingleJob continuously submit to FIFO, Parallel and Cache at their existing intervals.
+
+Successful submissions are recorded in order in the delivery snapshot. Accepted
+roots retain their host token and execute through the public serial FIFO contract
+on channel zero. A failed submission is recorded; a later tick tries a fresh root.
+Stop arrivals closes all workflow timers without cancelling accepted work. Keep
+the host running to observe the accumulated backlog drain after stopping arrivals.
+
+Graph membership is captured before enqueue, keeping each independent root in its
+own composed run. FIFO ordering edges do not merge those memberships. The existing
+projection shows waiting jobs in Unassigned and execution on the observed channel;
+no queue scheduling or event data is synthesized by the scenario. Observer delivery
+order does not establish handler order, and queue `WaitAsync` does not drain observers.
+Host ownership, timer cleanup, runtime identity and browser lifecycle are unchanged.
+
+The focused integration test holds handlers while more than six roots are accepted,
+explicitly stops arrivals, then checks handler start/finish order separately from
+observer completion, channel zero and composed membership. A combined integration
+case includes all three workflows and verifies they continue until explicit stop.
+Runtime and browser
+acceptance remain human-run; see the [sample launch guide](../../samples/TplQueue.Sample.BlazorSignalR/README.md).
 
 ### Single-job scenario (UC01)
 

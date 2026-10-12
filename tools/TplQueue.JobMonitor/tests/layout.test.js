@@ -10,6 +10,28 @@ const job = (id, channel, extra = {}) => ({ id, queueId: 'q', channel, name: id,
   observedAt: time, state: 'running', dependsOn: [], ...extra });
 const data = jobs => ({ queues: [{ id: 'q', name: 'Parallel', maxParallelism: 3 }], jobs });
 
+test('standalone ingest stays separate from ETL and labels distinguish assignments from dependencies', () => {
+  const model = normalize(data([
+    job('ingest', 0, { rootJobIds: ['load'] }),
+    job('transform', 1, { rootJobIds: ['load'], dependsOn: ['ingest'] }),
+    job('load', 2, { rootJobIds: ['load'], dependsOn: ['transform'], isRoot: true }),
+    job('single', 0, { name: 'Single ingest', rootJobIds: ['single'], isRoot: true,
+      observedAt: '2026-09-17T12:00:01.000Z', enqueuedAt: time })
+  ]));
+  const view = layout(model, { referenceTime: Date.parse(time) + 2000, expandedUnassigned: new Set(['q']) });
+  assert.deepEqual(connected(model, 'single'), new Set(['single']));
+  assert.deepEqual(view.edges.filter(e => e.kind === 'dependency').map(e => [e.from, e.to]),
+    [['ingest', 'transform'], ['transform', 'load']]);
+  const assignment = view.edges.find(e => e.kind === 'assignment');
+  assert.equal(assignment.from, 'single');
+  assert.equal(assignment.to, 'single');
+  assert.match(assignment.description, /same job.*single/);
+  assert.match(view.edges[0].description, /transform.*depends on.*ingest/);
+  const single = view.nodes.find(n => n.id === 'single');
+  assert.match(single.relationshipText, /Dependency IDs: none/);
+  assert.match(single.relationshipText, /Root IDs: single/);
+});
+
 test('shared memberships are detached and graph focus preserves every dependency for all outcomes', () => {
   for (const state of ['running', 'failed', 'cancelled']) {
     const roots = ['first', 'second'];

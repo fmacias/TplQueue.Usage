@@ -53,7 +53,27 @@ public sealed class SimulationRegistrationTests
                 Throws.ArgumentNullException);
             Assert.That(() => SampleEtlServiceCollectionExtensions.AddSampleSingleJobSimulation(null!),
                 Throws.ArgumentNullException);
+            Assert.That(() => SampleEtlServiceCollectionExtensions.AddSampleMultipleFifoRootsSimulation(null!),
+                Throws.ArgumentNullException);
         });
+    }
+
+    [Test]
+    public void MultipleFifoRootsRegistration_IsIdempotent()
+    {
+        // Arrange
+        var services = new ServiceCollection();
+
+        // Act
+        services.AddSampleMultipleFifoRootsSimulation();
+        services.AddSampleMultipleFifoRootsSimulation();
+
+        // Assert
+        var workflow = services.Single(item => item.ServiceType == typeof(ISimulationWorkflow));
+        Assert.That(workflow.ImplementationType!.Name, Is.EqualTo("MultipleFifoRootsWorkflow"));
+        Assert.That(workflow.Lifetime, Is.EqualTo(ServiceLifetime.Singleton));
+        Assert.That(services.Count(item => item.ServiceType == typeof(IEtlQueueRuntime)), Is.EqualTo(1));
+        Assert.That(services.Any(item => item.ServiceType == typeof(ISampleJobFactory)), Is.False);
     }
 
     [Test]
@@ -65,15 +85,18 @@ public sealed class SimulationRegistrationTests
         // Act
         services.AddSampleEtlWorkflow();
         services.AddSampleSingleJobSimulation();
+        services.AddSampleMultipleFifoRootsSimulation();
         services.AddSampleEtlWorkflow();
         services.AddSampleSingleJobSimulation();
+        services.AddSampleMultipleFifoRootsSimulation();
 
         // Assert
         Assert.Multiple(() =>
         {
             var workflows = services.Where(item => item.ServiceType == typeof(ISimulationWorkflow)).ToArray();
-            Assert.That(workflows, Has.Length.EqualTo(2));
-            Assert.That(workflows.Select(item => item.ImplementationType).Distinct().Count(), Is.EqualTo(2));
+            Assert.That(workflows, Has.Length.EqualTo(3));
+            Assert.That(workflows.Select(item => item.ImplementationType!.Name), Is.EquivalentTo(new[]
+                { "EtlSimulationWorkflow", "SingleJobWorkflow", "MultipleFifoRootsWorkflow" }));
             Assert.That(workflows.Select(item => item.Lifetime), Is.All.EqualTo(ServiceLifetime.Singleton));
             Assert.That(services.Count(item => item.ServiceType == typeof(ISimulationGraphCatalog)), Is.EqualTo(1));
             Assert.That(services.Single(item => item.ServiceType == typeof(ISimulationService)).Lifetime,

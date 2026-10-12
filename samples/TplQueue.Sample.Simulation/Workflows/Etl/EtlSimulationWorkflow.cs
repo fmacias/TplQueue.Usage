@@ -9,7 +9,6 @@ namespace TplQueue.Sample.Simulation.Workflows.Etl
     internal sealed class EtlSimulationWorkflow : ScheduledWorkflow
     {
         private const string WorkflowId = "etl";
-        private const int ActiveRunLimit = 2;
         private readonly IMeasurementSource _measurementsSource;
         private readonly ISampleJobFactory _jobsFactory;
 
@@ -21,7 +20,6 @@ namespace TplQueue.Sample.Simulation.Workflows.Etl
         }
 
         protected override string ScenarioId => WorkflowId;
-        protected override int MaximumActiveRuns => ActiveRunLimit;
 
         protected override Guid Submit(AvailableQueue queue, CancellationToken cancellationToken)
         {

@@ -102,7 +102,6 @@ public sealed class ScheduledWorkflowTests
     {
         public ConcurrentQueue<AvailableQueue> Attempts { get; } = new();
         protected override string ScenarioId => "test";
-        protected override int MaximumActiveRuns => 1;
         protected override Guid Submit(AvailableQueue queue, CancellationToken cancellationToken)
         {
             Attempts.Enqueue(queue);

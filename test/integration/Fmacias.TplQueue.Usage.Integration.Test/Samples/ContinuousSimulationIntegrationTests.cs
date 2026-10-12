@@ -12,8 +12,9 @@ namespace Fmacias.TplQueue.Integration.Test.Samples;
 [TestFixture]
 public sealed class ContinuousSimulationIntegrationTests
 {
-    [Test]
-    public async Task StopCombinedSimulation_LetsAllAcceptedGraphsFinishWithoutCancellation()
+    [TestCase(false)]
+    [TestCase(true)]
+    public async Task StopCombinedSimulation_LetsAllAcceptedGraphsFinishWithoutCancellation(bool includeMultipleFifoRoots)
     {
         // Arrange: real module, queues, hydration and registered handlers.
         var api = API.Create(CoreApi.Create(), new Dictionary<string, IRetryPolicyOptions>(),
@@ -30,22 +31,34 @@ public sealed class ContinuousSimulationIntegrationTests
         services.AddSampleDomain();
         services.AddSampleEtlWorkflow();
         services.AddSampleSingleJobSimulation();
+        if (includeMultipleFifoRoots) services.AddSampleMultipleFifoRootsSimulation();
         using var provider = services.BuildServiceProvider();
         provider.RegisterSampleEtlPayloadHandlers();
         var workflows = provider.GetServices<ISimulationWorkflow>().ToArray();
-        Assert.That(workflows, Has.Length.EqualTo(2));
+        Assert.That(workflows, Has.Length.EqualTo(includeMultipleFifoRoots ? 3 : 2));
         Assert.That(provider.GetServices<ISimulationWorkflow>().ToArray(), Is.EqualTo(workflows));
         var simulation = provider.GetRequiredService<ISimulationService>();
         Assert.That(provider.GetRequiredService<ISimulationService>(), Is.SameAs(simulation));
         var observer = new Observer();
         using var subscription = simulation.Subscribe(observer);
-        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
 
-        // Act: stop after the first six submissions while the real handlers are still running.
+        // Act: let UC03 continue past the former six-root limit, then explicitly stop every workflow.
         simulation.Start(timeout.Token);
-        while (simulation.GetSnapshot().Any(snapshot => snapshot.RootIds.Count < 3))
-            await Task.Delay(10, timeout.Token);
-        await simulation.StopAsync();
+        try
+        {
+            while (simulation.GetSnapshot().Any(snapshot => snapshot.RootIds.Count < 3))
+                await Task.Delay(10, timeout.Token);
+            if (includeMultipleFifoRoots)
+            {
+                while (simulation.GetSnapshot().Single(snapshot => snapshot.ScenarioId == "multiple-fifo-roots")
+                    .RootIds.Count < 8) await Task.Delay(10, timeout.Token);
+                Assert.That(simulation.Completion.IsCompleted, Is.False,
+                    "Every workflow must keep delivering until the session is explicitly stopped.");
+                Assert.That(workflows.All(workflow => !workflow.Completion.IsCompleted), Is.True);
+            }
+        }
+        finally { await simulation.StopAsync(); }
         await simulation.Completion;
         var stopped = simulation.GetSnapshot();
         var roots = stopped.SelectMany(s => s.RootIds).ToArray();
@@ -53,22 +66,40 @@ public sealed class ContinuousSimulationIntegrationTests
         Assert.That(timeout.IsCancellationRequested, Is.False);
         await Task.WhenAll(roots.Select(observer.Completed)).WaitAsync(timeout.Token);
 
-        // Assert: Stop closes admission without cancelling either workload's graphs.
-        Assert.That(stopped.Select(s => s.ScenarioId), Is.EquivalentTo(new[]
-            { "etl", "single" }));
-        Assert.That(stopped.Select(s => s.RootIds.Count), Is.All.EqualTo(3));
-        Assert.That(roots.Distinct().Count(), Is.EqualTo(6));
-        Assert.That(stopped.Select(s => s.FailedTicks + s.SkippedTicks), Is.All.Zero);
+        // Assert: Stop closes admission without cancelling any workload's graphs.
+        Assert.That(stopped.Select(s => s.ScenarioId), Is.EquivalentTo(includeMultipleFifoRoots
+            ? new[] { "etl", "single", "multiple-fifo-roots" } : new[] { "etl", "single" }));
+        var etlRoots = stopped.Single(s => s.ScenarioId == "etl").RootIds.Count;
+        var singleRoots = stopped.Single(s => s.ScenarioId == "single").RootIds.Count;
+        var fifoRoots = includeMultipleFifoRoots
+            ? stopped.Single(s => s.ScenarioId == "multiple-fifo-roots").RootIds : Array.Empty<Guid>();
+        Assert.That(etlRoots, Is.GreaterThanOrEqualTo(3));
+        Assert.That(singleRoots, Is.GreaterThanOrEqualTo(3));
+        if (includeMultipleFifoRoots)
+            Assert.That(fifoRoots.Count, Is.GreaterThanOrEqualTo(8));
+        else
+        {
+            Assert.That(etlRoots, Is.EqualTo(3));
+            Assert.That(singleRoots, Is.EqualTo(3));
+            Assert.That(stopped.Select(s => s.SkippedTicks), Is.All.Zero);
+        }
+        Assert.That(roots.Distinct().Count(), Is.EqualTo(roots.Length));
+        Assert.That(stopped.Select(s => s.FailedTicks), Is.All.Zero);
         Assert.That(observer.Events.Any(e => e.Status is JobEventStatus.Failed or JobEventStatus.Canceled), Is.False);
-        Assert.That(observer.Events.Select(e => e.JobInfo.Id).Distinct().Count(), Is.EqualTo(12));
+        Assert.That(observer.Events.Select(e => e.JobInfo.Id).Distinct().Count(),
+            Is.EqualTo(etlRoots * 3 + singleRoots + fifoRoots.Count));
         var completedByQueue = observer.Events.Where(e => e.Status == JobEventStatus.RootSuccessed)
             .GroupBy(e => e.JobInfo.CrossQueueId).ToArray();
         Assert.That(completedByQueue, Has.Length.EqualTo(3));
-        Assert.That(completedByQueue.Select(queue => queue.Count()), Is.All.EqualTo(2));
+        var fifoId = provider.GetRequiredService<IEtlQueueRuntime>().GetQueue(AvailableQueue.FIFO).QueueId;
+        Assert.That(observer.Events.Where(e => e.Status == JobEventStatus.RootSuccessed && fifoRoots.Contains(e.JobInfo.Id))
+            .Select(e => e.JobInfo.CrossQueueId), Is.All.EqualTo(fifoId));
+        if (!includeMultipleFifoRoots)
+            Assert.That(completedByQueue.Select(queue => queue.Count()), Is.All.EqualTo(2));
         Assert.That(observer.Events.Where(e => e.Status == JobEventStatus.RootSuccessed)
-            .Select(e => e.JobInfo.Name), Has.Exactly(3).EqualTo("Single job: ingest measurements"));
+            .Select(e => e.JobInfo.Name), Has.Exactly(singleRoots + fifoRoots.Count).EqualTo("Single job: ingest measurements"));
         Assert.That(observer.Events.Where(e => e.Status == JobEventStatus.RootSuccessed)
-            .Select(e => e.JobInfo.Name), Has.Exactly(3).EqualTo("Load measurement summary"));
+            .Select(e => e.JobInfo.Name), Has.Exactly(etlRoots).EqualTo("Load measurement summary"));
         Assert.That(simulation.GetSnapshot().SelectMany(snapshot => snapshot.RootIds), Is.EquivalentTo(roots));
     }
 

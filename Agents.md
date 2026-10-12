@@ -34,6 +34,18 @@ workloads; browsers observe them. Preserve observer-driven snapshots, actual
 execution-channel metadata and the existing JobMonitor integration. Read the
 architecture guide for detailed lifecycle, graph and presentation semantics.
 
+Register every added simulation workflow unconditionally in the Blazor host,
+alongside all existing workflows. Do not introduce configuration flags, profiles
+or mutually exclusive workflow selection. Preserving existing workflows means
+keeping their behavior and schedules while including each new workflow.
+Every workflow continuously creates fresh jobs through its factory in Submit on
+each scheduled arrival until StopAsync or host cancellation. Do not cache jobs
+for replay, stop after a lifetime root count, or suppress submissions because
+earlier roots are queued/running. Execution capacity belongs to the product queue;
+waiting jobs must be enqueued so their real observations reach the monitor.
+Keep the existing guard against overlapping submission callbacks. Delivery history
+stores root IDs only. Stop/Completion concern arrivals, not execution/observer drain.
+
 ## Documentation map
 
 - [README](README.md): repository/sample overview and product-dependency Roadmap.

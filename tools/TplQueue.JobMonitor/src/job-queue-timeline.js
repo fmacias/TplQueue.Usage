@@ -37,7 +37,7 @@ export class JobQueueTimeline extends HTMLElement {
     listen(this.shadowRoot, 'focusin', e => {
       const job = this.#view?.nodes.find(j => j.markerId === e.target.getAttribute?.('data-marker-id'));
       if (job) {
-        this.shadowRoot.querySelector('.accessible-info').textContent = `${job.name}, ${job.phase}, ${job.state}, ${job.observedAt}, ${job.description}. ${job.metadataText}`;
+        this.shadowRoot.querySelector('.accessible-info').textContent = `${job.name}, ${job.phase}, ${job.state}, ${job.observedAt}, ${job.description}. ${job.relationshipText}. ${job.metadataText}`;
         this.#highlight(job.markerId);
       }
     });

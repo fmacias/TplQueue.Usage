@@ -19,7 +19,7 @@ const viewer=()=>frame.contentDocument?.querySelector('job-queue-timeline');
 const queuesComplete=()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
   .filter(q=>combined ? Number(q.dataset.total)>0 && q.dataset.completed===q.dataset.total
     : q.dataset.completed===completedPerQueue).length===3;
-if(combined) await check('both workloads keep arriving until Stop; accepted jobs drain and other circuits observe stop',async()=>{
+if(combined) await check('combined workflows keep arriving until Stop; accepted jobs drain and other circuits observe stop',async()=>{
   await until(()=>[...frame.contentDocument.querySelectorAll('[data-completed]')]
     .filter(q=>Number(q.dataset.completed)>=12).length===3,30000);
   // Wait for another arrival so Stop is exercised while real jobs are still executing.
@@ -32,7 +32,11 @@ if(combined) await check('both workloads keep arriving until Stop; accepted jobs
     frame.contentDocument.querySelector('[data-stop-arrivals]').click();
     await until(()=>frame.contentDocument.querySelector('[data-arrivals-state="stopped"]'));
     await until(()=>peer.contentDocument.querySelector('[data-arrivals-state="stopped"]'));
-    await until(queuesComplete);
+    // Continuous UC03 arrivals can leave a substantial FIFO backlog after Stop.
+    // Allow two seconds per observed job plus delivery slack; completion still needs actual observations.
+    const observedJobs=[...frame.contentDocument.querySelectorAll('[data-total]')]
+      .reduce((sum,q)=>sum+Number(q.dataset.total),0);
+    await until(queuesComplete,10000+observedJobs*2000);
     const totals=()=>[...frame.contentDocument.querySelectorAll('[data-total]')]
       .map(q=>Number(q.dataset.total));
     const stoppedTotals=totals();expectedJobs=stoppedTotals.reduce((sum,count)=>sum+count,0);

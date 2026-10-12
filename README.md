@@ -47,17 +47,23 @@ use-case specifications derived from the current source.
 
 The Blazor sample uses the reusable `job-queue-timeline` Web Component with real runtime execution channels, vertical time, and a full-area viewer without a permanent details panel. See the maintained architecture guide for contracts and validation.
 The component's five-second overview uses exact square position markers, a left UTC ruler and compact channels. Dense jobs use count markers with temporary closer inspection in the same viewer.
-The Simulation module runs ETL and independent single-job scenarios together by
-default, starting after one second and repeating every three seconds. **Stop
+The Simulation module runs ETL, independent single-job and UC03 FIFO scenarios
+together. ETL and SingleJob start after one second and repeat every three seconds. **Stop
 arrivals** closes admission across all browser tabs while accepted jobs finish.
 The host starts delivery; opening a browser never starts or restarts it.
-ETL and SingleJob share `ISimulationWorkflow`, with a `System.Threading.Timer`
+All three workflows share `ISimulationWorkflow`, with a `System.Threading.Timer`
 owned by each workflow instance. Simulation folders separate workflows,
 measurements, session lifecycle, execution and graph tracking. Domain owns job
 factories, payloads, handlers and queue/cache wrappers under `samples/TplQueue.Sample.Domain`.
 See [workflow structure](docs/architecture/blazor-consumer-sample.md#workflow-structure).
-The host registers both workflows directly; timing is fixed and finite host profiles
-are no longer available.
+The host always registers every implemented workflow together, without a selector.
+UC03 continuously creates independent Domain ingest roots on the existing FIFO,
+starting after one second at 100 ms intervals. The existing 500 ms handler makes
+waiting work visible. All workflows enqueue fresh jobs until Stop arrivals or host
+cancellation, without sample active-root caps or lifetime root limits. FIFO retains
+serial execution; queued jobs remain observable while waiting. The backlog grows
+during delivery and drains after Stop arrivals while the host remains running.
+The former general-purpose finite host profiles remain unavailable.
 See [continuous delivery and controls](docs/architecture/blazor-consumer-sample.md#continuous-combined-demo)
 and the [sample launch instructions](samples/TplQueue.Sample.BlazorSignalR/README.md).
 Graph membership is captured before enqueue, so running, failed and cancelled jobs

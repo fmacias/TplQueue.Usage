@@ -78,7 +78,11 @@ actual channel-acquisition time for assigned jobs; the JavaScript component cann
 recover a Started event from an arbitrary observation timestamp.
 Terminal snapshots retain their captured channel after capacity is released.
 Root identity never controls channel placement. `dependsOn` creates job-to-job edges;
-enqueue-to-start arrows connect positions of the same job. Missing dependency
+enqueue-to-start arrows connect positions of the same job. The footer distinguishes
+solid dependency lines from dashed assignment arrows. Hover a line to read its
+relationship and endpoint job IDs. Job tooltips and keyboard focus announcements
+include dependency IDs (`none` when empty) and supplied root membership IDs.
+Missing dependency
 endpoints remain unresolved. State aliases `queued` and `canceled`
 normalize to `waiting` and `cancelled`; unsupported states display as `unknown`.
 

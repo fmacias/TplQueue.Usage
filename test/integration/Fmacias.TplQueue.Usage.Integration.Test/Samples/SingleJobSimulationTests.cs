@@ -3,7 +3,6 @@ using System.Text.Json;
 using Fmacias.TplQueue.Contracts;
 using Fmacias.TplQueue.Core;
 using Fmacias.TplQueue.Defaults;
-using global::Fmacias.TplQueue;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
@@ -12,6 +11,7 @@ using TplQueue.Sample.Simulation.Composition;
 using TplQueue.Sample.Domain.Composition;
 using TplQueue.Sample.Domain.Handlers;
 using TplQueue.Sample.Domain.Payloads;
+using TplQueue.Sample.Simulation.Workflows.MultipleFifoRoots;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
 
@@ -74,6 +74,99 @@ public sealed class SingleJobSimulationTests
         });
     }
 
+    [Test]
+    public async Task MultipleFifoRoots_BuildsVisibleBacklogThenExecutesInSubmissionOrderOnChannelZero()
+    {
+        // Arrange: hold handlers while arrivals continue; observer order is not execution evidence.
+        var release = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var execution = new ConcurrentQueue<(Guid Root, string Phase)>();
+        using var context = new Context(multipleFifoRoots: true, release: release.Task, execution: execution);
+        var simulation = context.Provider.GetRequiredService<ISimulationService>();
+        var runtime = context.Provider.GetRequiredService<IEtlQueueRuntime>();
+        var graphs = context.Provider.GetRequiredService<ISimulationGraphCatalog>();
+        using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        try
+        {
+            // Act: accept more than six roots while no handler can finish, then explicitly stop arrivals.
+            simulation.Start(timeout.Token);
+            while (simulation.GetSnapshot().Single().RootIds.Count < 8) await Task.Delay(10, timeout.Token);
+            Assert.That(simulation.Completion.IsCompleted, Is.False);
+            await simulation.StopAsync();
+            var delivery = simulation.GetSnapshot().Single();
+            while (context.Observer.Events.Where(e => e.Status == JobEventStatus.Enqueued)
+                    .Select(e => e.JobInfo.Id).Distinct().Count() < delivery.RootIds.Count ||
+                context.Observer.Events.All(e => e.Status != JobEventStatus.Started))
+                await Task.Delay(10, timeout.Token);
+            var backlog = JobMonitorMapper.Map(context.Store.GetSnapshot());
+
+            // Assert: the existing runtime FIFO is also the observed queue, with independent memberships.
+            Assert.Multiple(() =>
+            {
+                Assert.That(delivery.ScenarioId, Is.EqualTo("multiple-fifo-roots"));
+                Assert.That(delivery.RootIds.Count, Is.GreaterThanOrEqualTo(8));
+                Assert.That(delivery.RootIds.Distinct().Count(), Is.EqualTo(delivery.RootIds.Count));
+                Assert.That(delivery.FailedTicks, Is.Zero);
+                Assert.That(delivery.RootIds.All(runtime.IsActive), Is.True);
+                Assert.That(backlog.Jobs, Has.Count.EqualTo(delivery.RootIds.Count));
+                Assert.That(backlog.Jobs.Count(job => job.Channel == null && job.State == "waiting"),
+                    Is.EqualTo(delivery.RootIds.Count - 1));
+                Assert.That(backlog.Jobs.Select(job => job.QueueId),
+                    Is.All.EqualTo(runtime.GetQueue(AvailableQueue.FIFO).QueueId.ToString()));
+                Assert.That(context.Observer.Events.Any(e => e.Status == JobEventStatus.RootSuccessed), Is.False);
+                foreach (var root in delivery.RootIds)
+                    Assert.That(graphs.GetRootJobIds(root), Is.EqualTo(new[] { root }));
+            });
+
+            release.TrySetResult(true);
+            await runtime.GetQueue(AvailableQueue.FIFO).WaitAsync().WaitAsync(timeout.Token);
+            // Wait separately for observation: queue completion does not drain callbacks.
+            await Task.WhenAll(delivery.RootIds.Select(context.Observer.Completion)).WaitAsync(timeout.Token);
+            while (delivery.RootIds.Any(runtime.IsActive) ||
+                context.Observer.Events.Where(e => e.Status == JobEventStatus.Started)
+                    .Select(e => e.JobInfo.Id).Distinct().Count() < delivery.RootIds.Count)
+                await Task.Delay(10, timeout.Token);
+            var finished = JobMonitorMapper.Map(context.Store.GetSnapshot());
+
+            Assert.Multiple(() =>
+            {
+                Assert.That(execution, Is.EqualTo(delivery.RootIds.SelectMany(id =>
+                    new[] { (id, "start"), (id, "finish") })), "Handler calls must be serial and FIFO.");
+                Assert.That(context.Calls.Values, Is.All.EqualTo(1));
+                Assert.That(context.Calls, Has.Count.EqualTo(delivery.RootIds.Count));
+                Assert.That(finished.Jobs.Select(job => job.Channel), Is.All.EqualTo(0));
+                Assert.That(finished.Jobs.Select(job => job.State), Is.All.EqualTo("completed"));
+                Assert.That(finished.Jobs.All(job => job.EnqueuedAt.HasValue), Is.True);
+                foreach (var job in finished.Jobs)
+                    Assert.That(job.RootJobIds, Is.EqualTo(new[] { job.Id }),
+                        "FIFO ordering edges must not merge composed root membership.");
+                Assert.That(simulation.GetSnapshot().Single().RootIds, Is.EqualTo(delivery.RootIds));
+            });
+        }
+        finally
+        {
+            release.TrySetResult(true);
+            await simulation.StopAsync();
+        }
+    }
+
+    [Test]
+    public void MultipleFifoRoots_RejectsMissingDependencies()
+    {
+        // Arrange
+        using var context = new Context();
+        var runtime = context.Provider.GetRequiredService<IEtlQueueRuntime>();
+        var measurements = context.Provider.GetRequiredService<IMeasurementSource>();
+        var jobs = context.Provider.GetRequiredService<ISampleJobFactory>();
+
+        // Act / Assert
+        Assert.Multiple(() =>
+        {
+            Assert.That(() => new MultipleFifoRootsWorkflow(null!, measurements, jobs), Throws.ArgumentNullException);
+            Assert.That(() => new MultipleFifoRootsWorkflow(runtime, null!, jobs), Throws.ArgumentNullException);
+            Assert.That(() => new MultipleFifoRootsWorkflow(runtime, measurements, null!), Throws.ArgumentNullException);
+        });
+    }
+
     private sealed class Context : IDisposable
     {
         public ServiceProvider Provider { get; }
@@ -83,7 +176,8 @@ public sealed class SingleJobSimulationTests
         public ConcurrentDictionary<Guid, int> Calls { get; } = new();
         private readonly IDisposable _subscription;
 
-        public Context()
+        public Context(bool multipleFifoRoots = false, Task? release = null,
+            ConcurrentQueue<(Guid Root, string Phase)>? execution = null)
         {
             var api = API.Create(CoreApi.Create(), new Dictionary<string, IRetryPolicyOptions>(),
                 new Dictionary<string, IQOptions>
@@ -94,14 +188,15 @@ public sealed class SingleJobSimulationTests
             var services = new ServiceCollection();
             services.AddLogging();
             services.AddSingleton<IApi>(api);
-            services.AddSingleton<IDataJobFactory>(new CountingFactory(api.DataJobFactory, Calls));
+            services.AddSingleton<IDataJobFactory>(new CountingFactory(api.DataJobFactory, Calls, release, execution));
             services.AddSingleton(api.QFactory);
             services.AddSingleton(api.RetryPolicyAbstractFactory);
             services.AddSingleton(api.SystemTextSerializerFactory());
             services.AddTransient<ISystemTextJsonUniversalSerializer>(sp =>
                 sp.GetRequiredService<ISystemTextJsonSerializerFactory>().Serializer(new JsonSerializerOptions()));
             services.AddSampleDomain();
-            services.AddSampleSingleJobSimulation();
+            if (multipleFifoRoots) services.AddSampleMultipleFifoRootsSimulation();
+            else services.AddSampleSingleJobSimulation();
             Provider = services.BuildServiceProvider();
             api.RegisterPayloadHandler(IngestMeasurementsPayload.HandlerId,
                 new CountingHandler(IngestMeasurementsHandler.Create(
@@ -120,33 +215,39 @@ public sealed class SingleJobSimulationTests
         public void Dispose() { _subscription.Dispose(); Provider.Dispose(); }
     }
 
-    private sealed class CountingHandler(IHandler inner, ConcurrentDictionary<Guid, int> calls) : IHandler
+    private sealed class CountingHandler(IHandler inner, ConcurrentDictionary<Guid, int> calls,
+        Task? release = null, ConcurrentQueue<(Guid Root, string Phase)>? execution = null) : IHandler
     {
-        public Task HandleAsync(IPayload payload, CancellationToken cancellationToken)
+        public async Task HandleAsync(IPayload payload, CancellationToken cancellationToken)
         {
-            calls.AddOrUpdate(((IngestMeasurementsPayload)payload).EtlOperationId, 1, (_, count) => count + 1);
-            return inner.HandleAsync(payload, cancellationToken);
+            var id = ((IngestMeasurementsPayload)payload).EtlOperationId;
+            calls.AddOrUpdate(id, 1, (_, count) => count + 1);
+            execution?.Enqueue((id, "start"));
+            if (release != null) await release.WaitAsync(cancellationToken);
+            await inner.HandleAsync(payload, cancellationToken);
+            execution?.Enqueue((id, "finish"));
         }
     }
 
     // Decorate the real factory without adding a test-only package dependency.
-    private sealed class CountingFactory(IDataJobFactory inner, ConcurrentDictionary<Guid, int> calls) : IDataJobFactory
+    private sealed class CountingFactory(IDataJobFactory inner, ConcurrentDictionary<Guid, int> calls,
+        Task? release = null, ConcurrentQueue<(Guid Root, string Phase)>? execution = null) : IDataJobFactory
     {
         public IDataJobRoot<T> DataJobRoot<T>(Guid id, T payload, IHandler handler, string name = "",
             Func<IRetryPolicy>? retryPolicy = null) where T : IPayload =>
-            inner.DataJobRoot(id, payload, new CountingHandler(handler, calls), name, retryPolicy);
+            inner.DataJobRoot(id, payload, new CountingHandler(handler, calls, release, execution), name, retryPolicy);
         public IDataJobRoot<T> DataJobRoot<T>(T payload, IHandler handler, string name = "",
             Func<IRetryPolicy>? retryPolicy = null) where T : IPayload =>
             DataJobRoot(Guid.NewGuid(), payload, handler, name, retryPolicy);
         public IDataJobRoot DataJobRoot(Guid id, string name, IPayload payload, IHandler handler,
             Func<IRetryPolicy>? retryPolicy = null) =>
-            inner.DataJobRoot(id, name, payload, new CountingHandler(handler, calls), retryPolicy);
+            inner.DataJobRoot(id, name, payload, new CountingHandler(handler, calls, release, execution), retryPolicy);
         public IDataJob<T> DataJob<T>(T payload, IHandler handler, string name = "") where T : IPayload =>
-            inner.DataJob(payload, new CountingHandler(handler, calls), name);
+            inner.DataJob(payload, new CountingHandler(handler, calls, release, execution), name);
         public IDataJob<T> DataJob<T>(Guid id, T payload, IHandler handler, string name = "") where T : IPayload =>
-            inner.DataJob(id, payload, new CountingHandler(handler, calls), name);
+            inner.DataJob(id, payload, new CountingHandler(handler, calls, release, execution), name);
         public IDataJob DataJob(IJobNodeRecord record, IPayload payload, IHandler handler) =>
-            inner.DataJob(record, payload, new CountingHandler(handler, calls));
+            inner.DataJob(record, payload, new CountingHandler(handler, calls, release, execution));
     }
 
     private sealed class RecordingObserver(EtlExecutionProjectionStore store) : IObserver<IJobEvent>

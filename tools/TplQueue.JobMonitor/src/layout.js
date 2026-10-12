@@ -88,6 +88,7 @@ export function layout(model, input = {}) {
     return { ...job, kind: 'job', x: job.channel === null ? queue.unassignedX : queue.channels[job.channel].x,
       y: trueY, trueY, timeLabel: new Date(job.time).toISOString().slice(11, 23),
       size: markerSize, targetSize: config.targetSize, unassigned: job.channel === null,
+      relationshipText: `ID: ${job.id}\nDependency IDs: ${job.dependsOn.join(', ') || 'none'}\nRoot IDs: ${job.rootJobIds.join(', ') || 'not supplied'}`,
       hidden: job.channel === null && !queue.unassignedExpanded };
   });
   const { markers, clusters } = groupMarkers(nodes, config, startTime, referenceTime);
@@ -109,6 +110,9 @@ export function layout(model, input = {}) {
     const toSize = kind === 'assignment' ? to.targetSize ?? to.size : to.size;
     const a = fromSize / 2 / length, b = toSize / 2 / length;
     edges.push({ from: source.id, to: target.id, fromMarker: source.markerId, toMarker: target.markerId, kind,
+      description: kind === 'assignment'
+        ? `Enqueue → Started: same job ${source.name} (ID: ${source.id})`
+        : `Dependency: ${target.name} (ID: ${target.id}) depends on ${source.name} (ID: ${source.id})`,
       path: `M ${from.x + dx * a} ${from.y + dy * a} L ${to.x - dx * b} ${to.y - dy * b}` });
   };
   let missingEdges = 0;

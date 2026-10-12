@@ -32,12 +32,12 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedMark
     x1: view.gutter, x2: view.width, y1: tick.y, y2: tick.y, class: 'time-grid' }));
   fragment.append(element('line', { x1: view.gutter, x2: view.width, y1: view.referenceY, y2: view.referenceY, class: 'reference-line' }));
   for (const edge of view.edges) {
-    const path = element('path', { d: edge.path,
+    const path = element('path', { d: edge.path, role: 'img', 'aria-label': edge.description,
       class: `${edge.kind} ${focusedIds && (!focusedIds.has(edge.from) || !focusedIds.has(edge.to)) ? 'dim' : ''}` });
     if (edge.kind === 'assignment') {
       path.setAttribute('marker-end', 'url(#assignment-arrow)');
-      title(path, 'Enqueue → Started');
     }
+    title(path, edge.description);
     fragment.append(path);
   }
 
@@ -74,7 +74,7 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedMark
       width: n.size, height: n.size, class: 'position-marker' }));
     node.append(element('text', { x: n.x + 7, y: n.y - 5, 'text-anchor': 'middle',
       class: 'state-symbol', 'aria-hidden': 'true' }, symbols[n.state] ?? '?'));
-    title(node, `${n.name}\nID: ${n.id}\nQueue: ${n.queueName}\nChannel: ${n.channel ?? 'unassigned'}\nPosition: ${n.channel === null && n.enqueuedAt === null ? 'unassigned observation' : n.phase}\nState: ${n.state}\nObserved: ${n.observedAt}\nDuration: ${n.durationMs === null ? 'unknown' : `${n.durationMs} ms`}\n${n.description}\nJob snapshot metadata:\n${n.metadataText}`);
+    title(node, `${n.name}\n${n.relationshipText}\nQueue: ${n.queueName}\nChannel: ${n.channel ?? 'unassigned'}\nPosition: ${n.channel === null && n.enqueuedAt === null ? 'unassigned observation' : n.phase}\nState: ${n.state}\nObserved: ${n.observedAt}\nDuration: ${n.durationMs === null ? 'unknown' : `${n.durationMs} ms`}\n${n.description}\nJob snapshot metadata:\n${n.metadataText}`);
     fragment.append(node);
   }
   for (const q of view.queues) {

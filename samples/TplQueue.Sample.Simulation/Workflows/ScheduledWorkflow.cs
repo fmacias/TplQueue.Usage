@@ -7,16 +7,16 @@ using TplQueue.Sample.Simulation.Runtime;
 
 namespace TplQueue.Sample.Simulation.Workflows
 {
-    /// <summary>Shares timer ownership and bounded admission between the ETL and single-job workflows.</summary>
+    /// <summary>Schedules fresh root submissions continuously until stopped or cancelled.</summary>
     internal abstract class ScheduledWorkflow : ISimulationWorkflow
     {
         private const int StartupOffsetMilliseconds = 1000;
-        private const int IntervalMilliseconds = 3000;
+        private readonly int _intervalMilliseconds;
 
         private readonly object _sync = new object();
-        private readonly List<Guid> _roots = new List<Guid>();
-        private readonly Dictionary<AvailableQueue, List<Guid>> _activeRoots =
-            new Dictionary<AvailableQueue, List<Guid>>();
+        // Delivery history contains identities only; job instances are created by Submit on each arrival.
+        private readonly List<Guid> _acceptedRootIds = new List<Guid>();
+        private readonly List<AvailableQueue> _queues = new List<AvailableQueue>();
         private readonly TaskCompletionSource<bool> _completion =
             new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         private Timer? _timer;
@@ -25,11 +25,23 @@ namespace TplQueue.Sample.Simulation.Workflows
         private int _ticks, _skippedTicks, _failedTicks;
         private string? _lastError;
 
-        protected ScheduledWorkflow(IEtlQueueRuntime runtime)
+        /// <summary>Configures the selected queues and interval for continuous arrivals.</summary>
+        /// <param name="runtime">The shared runtime used to enqueue newly created roots.</param>
+        /// <param name="queues">Distinct target queues; null selects all available queues.</param>
+        /// <param name="intervalMilliseconds">Positive interval between arrival attempts.</param>
+        protected ScheduledWorkflow(IEtlQueueRuntime runtime, IEnumerable<AvailableQueue>? queues = null,
+            int intervalMilliseconds = 3000)
         {
             Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
-            foreach (AvailableQueue queue in Enum.GetValues(typeof(AvailableQueue)))
-                _activeRoots.Add(queue, new List<Guid>());
+            if (intervalMilliseconds <= 0) throw new ArgumentOutOfRangeException(nameof(intervalMilliseconds));
+            _intervalMilliseconds = intervalMilliseconds;
+            foreach (var queue in queues ?? (AvailableQueue[])Enum.GetValues(typeof(AvailableQueue)))
+            {
+                if (!Enum.IsDefined(typeof(AvailableQueue), queue) || _queues.Contains(queue))
+                    throw new ArgumentException("Queues must be defined and distinct.", nameof(queues));
+                _queues.Add(queue);
+            }
+            if (_queues.Count == 0) throw new ArgumentException("At least one queue is required.", nameof(queues));
         }
 
         public Task Completion => _completion.Task;
@@ -37,9 +49,6 @@ namespace TplQueue.Sample.Simulation.Workflows
 
         /// <summary>Identifies the workflow in its aggregate delivery snapshot.</summary>
         protected abstract string ScenarioId { get; }
-
-        /// <summary>Limits accepted roots per queue that have not yet reached a terminal outcome.</summary>
-        protected abstract int MaximumActiveRuns { get; }
 
         public void Start(CancellationToken cancellationToken)
         {
@@ -53,7 +62,7 @@ namespace TplQueue.Sample.Simulation.Workflows
                 {
                     // Assign a disabled timer first: even a zero-offset callback sees fully initialized state.
                     _timer = new Timer(OnTick, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                    _timer.Change(StartupOffsetMilliseconds, IntervalMilliseconds);
+                    _timer.Change(StartupOffsetMilliseconds, _intervalMilliseconds);
                 }
                 catch
                 {
@@ -79,7 +88,7 @@ namespace TplQueue.Sample.Simulation.Workflows
         {
             lock (_sync)
                 return new ScenarioDeliverySnapshot(ScenarioId, _ticks, _skippedTicks,
-                    _failedTicks, _lastError, _roots);
+                    _failedTicks, _lastError, _acceptedRootIds);
         }
 
         /// <summary>Creates a distinct root for the specified queue using the workflow's factory method.</summary>
@@ -108,28 +117,20 @@ namespace TplQueue.Sample.Simulation.Workflows
             }
 
             // The timer already runs on a thread-pool thread; no extra Task.Run or event adapter is needed.
-            var skipped = false;
             var failed = false;
             try
             {
-                foreach (var queueRoots in _activeRoots)
+                foreach (var queue in _queues)
                 {
                     lock (_sync)
                     {
                         if (_stopped || _cancellationToken.IsCancellationRequested) return;
                         // This submission is admitted. StopAsync waits for its callback to finish.
                     }
-                    queueRoots.Value.RemoveAll(root => !Runtime.IsActive(root));
-                    if (queueRoots.Value.Count >= MaximumActiveRuns)
-                    {
-                        skipped = true;
-                        continue;
-                    }
                     try
                     {
-                        var rootId = Submit(queueRoots.Key, _cancellationToken);
-                        queueRoots.Value.Add(rootId);
-                        lock (_sync) _roots.Add(rootId);
+                        var rootId = Submit(queue, _cancellationToken);
+                        lock (_sync) _acceptedRootIds.Add(rootId);
                     }
                     catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
                     {
@@ -159,7 +160,6 @@ namespace TplQueue.Sample.Simulation.Workflows
             {
                 lock (_sync)
                 {
-                    if (skipped) _skippedTicks++;
                     if (failed) _failedTicks++;
                     _busy = false;
                     if (_cancellationToken.IsCancellationRequested) _stopped = true;

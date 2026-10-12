@@ -7,6 +7,7 @@ using TplQueue.Sample.Simulation.Runtime;
 using TplQueue.Sample.Simulation.Session;
 using TplQueue.Sample.Simulation.Workflows.Etl;
 using TplQueue.Sample.Simulation.Workflows.SingleJob;
+using TplQueue.Sample.Simulation.Workflows.MultipleFifoRoots;
 
 namespace TplQueue.Sample.Simulation.Composition
 {
@@ -28,6 +29,16 @@ namespace TplQueue.Sample.Simulation.Composition
             if (services == null) throw new ArgumentNullException(nameof(services));
             AddSimulationServices(services);
             services.TryAddEnumerable(ServiceDescriptor.Singleton<ISimulationWorkflow, SingleJobWorkflow>());
+            return services;
+        }
+
+        /// <summary>Registers continuous fresh-root FIFO arrivals at 100 ms intervals without a sample admission cap.</summary>
+        /// <remarks>Delivery starts through the simulation service. Completion closes arrivals without draining jobs.</remarks>
+        public static IServiceCollection AddSampleMultipleFifoRootsSimulation(this IServiceCollection services)
+        {
+            if (services == null) throw new ArgumentNullException(nameof(services));
+            AddSimulationServices(services);
+            services.TryAddEnumerable(ServiceDescriptor.Singleton<ISimulationWorkflow, MultipleFifoRootsWorkflow>());
             return services;
         }
 

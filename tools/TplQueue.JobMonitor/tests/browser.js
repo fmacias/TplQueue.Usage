@@ -263,6 +263,34 @@ await check('running failed and cancelled shared graphs preserve selection and e
   } finally { viewer.removeEventListener('job-select',listener); }
 });
 
+await check('edge labels and keyboard job details distinguish standalone ingest from ETL', async () => {
+  const make=(id,channel,roots,dependsOn=[])=>({id,queueId:'cache',channel,name:id,state:'completed',
+    rootJobIds:roots,dependsOn,observedAt:'2026-09-17T11:59:59.000Z'});
+  viewer.setData({queues:[{id:'cache',name:'CacheQ',maxParallelism:3}],jobs:[
+    make('etl-ingest',0,['etl-root']),make('etl-root',1,['etl-root'],['etl-ingest']),
+    {...make('single',2,['single']),isRoot:true,enqueuedAt:'2026-09-17T11:59:57.000Z'}]});
+  viewer.showOverview(); viewer.setReferenceTime(reference); viewer.focusJob('single'); await frame();
+  const assignment=viewer.shadowRoot.querySelector('path.assignment');
+  const dependency=viewer.shadowRoot.querySelector('path.dependency');
+  assert(assignment?.querySelector('title').textContent.includes('same job single (ID: single)'),
+    'assignment identifies the same job');
+  assert(dependency?.querySelector('title').textContent.includes('etl-root (ID: etl-root) depends on etl-ingest (ID: etl-ingest)'),
+    'dependency identifies both endpoints and direction');
+  assert(dependency.getAttribute('aria-label')===dependency.querySelector('title').textContent,
+    'edge has an accessible description');
+  assert(dependency.classList.contains('dim') && !assignment.classList.contains('dim'),
+    'standalone selection does not highlight the ETL dependency');
+  const single=viewer.shadowRoot.querySelector('[data-job-id="single"][data-phase="execution"]');
+  assert(single.querySelector('title').textContent.includes('Dependency IDs: none'),
+    'standalone tooltip explicitly reports no dependencies');
+  single.focus(); await frame();
+  const details=viewer.shadowRoot.querySelector('.accessible-info').textContent;
+  assert(details.includes('Dependency IDs: none') && details.includes('Root IDs: single'),
+    'keyboard focus announces dependency and root IDs');
+  assert(viewer.shadowRoot.querySelector('footer').textContent.includes('Dashed arrow = same job'),
+    'visible legend explains assignment arrows');
+});
+
 document.querySelector('#summary').textContent=`${passed} passed; ${failed} failed`;
 document.documentElement.dataset.result = failed ? 'failed' : 'passed';
 if(location.search.includes('automation')) await fetch('http://127.0.0.1:4178/__acceptance/done?id=standalone', {mode:'no-cors'});

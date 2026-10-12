@@ -14,24 +14,32 @@ the existing JobMonitor. Simulation has no Domain project reference.
 
 `EtlSimulationWorkflow` and `SingleJobWorkflow` reuse `ScheduledWorkflow`, each
 owning a `System.Threading.Timer`: one-second initial offset and three-second
-interval, attempting one root per queue per tick. ETL allows two active roots per
-queue; SingleJob allows one. A full pair of admitted ticks adds six roots and
-twelve unique jobs. Busy/capacity skips and submission failures reduce those counts.
+interval, attempting one fresh root per queue per tick without sample active-root
+caps. A full pair of ticks adds six roots and twelve unique jobs. Overlapping
+submission callbacks and submission failures can reduce those counts.
 
-The host starts both workflows independently of browser connections. Stop arrivals
+The host starts every implemented workflow together, independently of browser connections. Stop arrivals
 waits for admitted submissions, not job drain, and does not cancel accepted work.
 Completion means arrivals/submissions have stopped. Start is single-use.
 Continuous delivery exists now; retained history and business data are unbounded.
-Finite profiles and configurable timing from earlier milestones no longer exist.
+Finite profiles and configurable timing from earlier milestones remain unavailable.
+UC03 always runs alongside ETL and SingleJob with continuous fresh FIFO roots at
+100 ms intervals. Every workflow runs until Stop or host cancellation, with no
+lifetime root limit. Queued jobs remain observable while execution capacity is busy.
 
 ## Extension boundaries
 
 Add focused Domain graph factories/handlers and Simulation workflows or scenarios,
 using small additions to shared Contracts when needed. Reuse current scheduling,
 queue runtime, graph registration, observer projection and Blazor presentation.
-Extend `ScheduledWorkflow` only for a selected scenario's concrete needs; it
-currently schedules all three queues with fixed timing and one root per submission.
+Extend `ScheduledWorkflow` only for a selected scenario's concrete needs. It supports
+selected queues and an arrival interval, with
+one root per submission; defaults retain continuous delivery across all three queues.
 Do not build a generic workflow language or duplicate timer infrastructure.
+Register every added workflow unconditionally alongside existing workflows in the
+host. Do not add configuration flags, profiles or mutually exclusive selection.
+Create fresh jobs inside Submit for every arrival. Do not replay stored jobs or
+cap sample submissions based on active-root counts; queue capacity governs execution.
 
 Register composed membership before enqueue. Root IDs identify current one-root
 runs; shared jobs retain every root membership and one global job identity.
@@ -70,7 +78,7 @@ for an established dependency limitation recorded in the README.
 | --- | --- | --- |
 | [UC01 — Single job on each queue](simulation-tasks/uc01-single-job-on-each-queue.md) | Implemented | Independent ingest roots on all queues. |
 | [UC02 — Sequential ETL chain](simulation-tasks/uc02-sequential-etl-chain.md) | Implemented | Named ETL workflow and three-job dependency chain. |
-| [UC03 — Multiple FIFO roots](simulation-tasks/uc03-multiple-fifo-roots.md) | Pending | Add controlled FIFO backlog and ordering. |
+| [UC03 — Multiple FIFO roots](simulation-tasks/uc03-multiple-fifo-roots.md) | Implemented; validation pending | Continuous fresh FIFO roots alongside ETL/SingleJob; observable backlog drains after Stop. |
 | [UC04 — Multiple parallel roots](simulation-tasks/uc04-multiple-parallel-roots.md) | Pending | Add deliberate parallel saturation and channel reuse. |
 | [UC05 — Cache-backed ETL](simulation-tasks/uc05-cache-backed-etl.md) | Partially implemented | Cache ETL exists; acknowledgment and outcome variants remain. |
 | [UC06 — Branching and joining](simulation-tasks/uc06-branching-and-joining.md) | Pending | Add branches converging on a root. |
@@ -90,9 +98,9 @@ for an established dependency limitation recorded in the README.
 | [UC20 — Large shallow and deep narrow graphs](simulation-tasks/uc20-large-shallow-and-deep-narrow-graphs.md) | Pending | Add separate width/depth scenarios. |
 | [UC21 — Very short jobs and clustered starts](simulation-tasks/uc21-very-short-jobs-and-clustered-starts.md) | Pending | Add a dedicated short-job workload; grouping already exists. |
 | [UC22 — Long execution and idle periods](simulation-tasks/uc22-long-execution-and-idle-periods.md) | Pending | Add long-work/arrival-gap scenarios; idle rendering exists. |
-| [UC23 — Simulation lifecycle](simulation-tasks/uc23-simulation-lifecycle.md) | Partially implemented | Start/stop/shutdown exist; pause/resume, finite runs and drain remain. |
+| [UC23 — Simulation lifecycle](simulation-tasks/uc23-simulation-lifecycle.md) | Partially implemented | Continuous start/stop/shutdown exist; pause/resume and explicit drain remain. |
 | [UC24 — Browser lifecycle during execution](simulation-tasks/uc24-browser-lifecycle-during-execution.md) | Implemented | Host/view lifetime separation and event-driven reconnect paths exist. |
-| [UC25 — Bounded continuous operation](simulation-tasks/uc25-bounded-continuous-operation.md) | Partially implemented | Continuous delivery/admission exist; coordinated retention remains. |
+| [UC25 — Bounded continuous operation](simulation-tasks/uc25-bounded-continuous-operation.md) | Partially implemented | Continuous delivery exists without sample caps; completed-history retention remains. |
 
 Dependencies in each specification define useful implementation order, not a
 mandatory numeric sequence. UC06 and UC15 can build on the existing foundation;
@@ -119,7 +127,7 @@ behavior or authorize product changes.
 
 - UC09/UC19: minimal scheduling inputs and multi-root admission accounting.
 - UC10–UC14/UC18: supported root binding, ownership and Cache sharing at public API boundaries.
-- UC23: explicit pause/resume, finite completion and drain contracts without changing Stop/Completion.
+- UC23: explicit pause/resume and drain contracts without changing the existing Stop/Completion meaning.
 - UC25: completed-history count/horizon, shared-node retention and bounded late-event policy.
 - Contracts naming: `TplQueue.Sample.Contracts` is a proposed future name; see
   [shared contract responsibility](../architecture/blazor-consumer-sample.md#shared-contract-responsibility).

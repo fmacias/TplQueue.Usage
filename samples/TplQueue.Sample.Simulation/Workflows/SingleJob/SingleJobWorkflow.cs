@@ -9,7 +9,6 @@ namespace TplQueue.Sample.Simulation.Workflows.SingleJob
     internal sealed class SingleJobWorkflow : ScheduledWorkflow
     {
         private const string WorkflowId = "single";
-        private const int ActiveRunLimit = 1;
         private readonly IMeasurementSource _measurements;
         private readonly ISampleJobFactory _jobsFactory;
 
@@ -21,7 +20,6 @@ namespace TplQueue.Sample.Simulation.Workflows.SingleJob
         }
 
         protected override string ScenarioId => WorkflowId;
-        protected override int MaximumActiveRuns => ActiveRunLimit;
 
         protected override Guid Submit(AvailableQueue queue, CancellationToken cancellationToken)
         {

@@ -12,6 +12,7 @@ builder.Services.AddTplQueue(builder.Configuration, CoreApi.Create());
 builder.Services.AddSampleDomain();
 builder.Services.AddSampleEtlWorkflow();
 builder.Services.AddSampleSingleJobSimulation();
+builder.Services.AddSampleMultipleFifoRootsSimulation();
 builder.Services.AddMeasurementEtlConsumer();
 builder.Services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
 
