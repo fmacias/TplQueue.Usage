@@ -1,54 +1,13 @@
-# UC20 - Large shallow and deep narrow graphs
+# UC20 — Large shallow and deep narrow graphs
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate graph size and dependency depth as separate dimensions.
 
-## Thread scope and completion
+**Implementation:** Extend Domain graph factories with explicit shallow/wide and narrow/deep variants. Apply [normal graph sizing](../simulation-use-case-plan.md#graph-sizing) and cycle/size/depth validation at scenario construction. Simulation submits bounded runs through the existing runtime. A larger stress variant requires an explicit scenario size; it must not silently alter normal workloads.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Unique-node counts, root counts and longest-path depth are visible in scenario descriptions. Shared references count once globally. Invalid sizes or unsupported depth are rejected clearly. Monitor search, connected-graph focus and grouped markers remain usable within the demonstrated size, preserving exact timestamps and edges; no universal performance claim follows from a graph-size setting.
 
-## Dependencies
+**Dependencies:** [UC06](uc06-branching-and-joining.md), [UC07](uc07-diamond-graph.md), existing membership projection and graph-sizing decisions.
 
-Graph-size agreement from [P00](p00-record-decisions-and-establish-baseline.md), [UC06](uc06-branching-and-joining.md), [UC07](uc07-diamond-graph.md) and [P03](p03-establish-graph-identity-for-all-outcomes.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after graph-size agreement, UC06/UC07 and P03. Build
-  each shape separately, including the normal cap and an opt-in stress profile.
-- Verify unique-node counts, depth validation and useful validation errors. Check
-  graph focus, search and grouped markers without fabricating edges or timestamps.
-  Record browser/environment, snapshot size and update timings; report measured
-  limits rather than claiming the stress profile is universally responsive.
-
-## Suggested commit
-
-`feat(simulation): add bounded graph-size scenarios`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** The historical private-runtime depth guard is not a supported sample limit. Use current public constraints; record any required product enhancement and UC20 under the [README roadmap](../../../README.md#roadmap).

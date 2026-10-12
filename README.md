@@ -34,9 +34,16 @@ This repository focuses on runnable package-consumption samples, public integrat
 - [QueueObserverSignalRDashboard](samples/QueueObserverSignalRDashboard/README.md)
 - [TplQueue Blazor observable ETL sample](samples/TplQueue.Sample.BlazorSignalR/README.md)
 - [Blazor job monitor architecture and execution channels](docs/architecture/blazor-consumer-sample.md)
-- [Simulation implementation plan and individual tasks](docs/development/simulation-use-case-plan.md#task-checklist)
+- [Simulation use-case catalog and specifications](docs/development/simulation-use-case-plan.md#use-case-catalog)
 
 These samples are the canonical runnable examples cited by the product-repository docs.
+
+### BlazorSignalR sample
+
+The [component diagram](docs/architecture/blazor-sample-components.puml) shows the
+four sample projects, direct package references and runtime integration.
+The [development index](docs/development/index.md) leads to implementation-oriented
+use-case specifications derived from the current source.
 
 The Blazor sample uses the reusable `job-queue-timeline` Web Component with real runtime execution channels, vertical time, and a full-area viewer without a permanent details panel. See the maintained architecture guide for contracts and validation.
 The component's five-second overview uses exact square position markers, a left UTC ruler and compact channels. Dense jobs use count markers with temporary closer inspection in the same viewer.
@@ -58,6 +65,35 @@ retain their root identity. Shared jobs keep all root memberships and one job ID
 see [graph identity](docs/architecture/blazor-consumer-sample.md#simulation-graph-identity).
 Assigned positions use backend Started timestamps. The collapsible Unassigned strip retains recorded enqueue markers after assignment, with directed connectors to Started positions when both are visible. Both markers select the same job.
 After its initial snapshot, the Blazor monitor refreshes data when new observer events change the projection. Live time advances on snapshot arrival; the idle view has no periodic refresh. User interactions and resizing still redraw locally.
+
+`TplQueue.Sample.Etl.Contracts` supplies shared sample interfaces and DTOs beyond
+ETL, including workflow/session, runtime and graph membership contracts.
+`TplQueue.Sample.Contracts` is a proposed future name; no rename is applied or
+required for these use cases. See [contract responsibility](docs/architecture/blazor-consumer-sample.md#shared-contract-responsibility).
+
+#### Roadmap
+
+Future sample implementation stays inside `TplQueue.Usage`. Do not modify
+`TplQueue.Abstractions`, `TplQueue.Adapter` or `TplQueue.Core` for a use case.
+If supported public APIs are insufficient, add a concrete entry here with the
+proposed enhancement, motivation, owning product repository, affected API/behavior
+and blocked UC ID. Continue supported variants where possible; do not substitute
+an undocumented workaround that changes product semantics.
+
+No product enhancement is confirmed as required by this source inspection. The
+following questions are retained explicitly; they are not claims of current
+package defects or blanket blockers for the use-case catalog.
+
+| Question / potential enhancement if confirmed | Motivation and affected public boundary | Affected use cases / blocking status |
+| --- | --- | --- |
+| Clarify supported shared-root binding and cross-queue ownership; request additive support only if the intended topology is unavailable | Public job/graph factories, dependency composition and enqueue ownership must support a shared instance without cloning work or assigning ownership in the UI. Contract ownership is Abstractions/Adapter; runtime behavior is Core. | UC10–UC14, UC18; pending contract-dependent scenarios, no confirmed blocked UC. |
+| Clarify CacheQ sharing across hydration and acknowledgment observation | Public `ICacheQ`, cache/serialization contracts and registered handlers must preserve the identities and completion boundary required by a scenario. Any missing supported capability would need an explicit product proposal. | UC05, UC11, UC16–UC18, UC23; no confirmed blocked UC. |
+| Investigate the historical capacity-one Cache stall before claiming that variant | The old UC01 record observed a stall at capacity one and success at capacity two. Any confirmed defect would concern CacheQ/underlying dispatcher capacity progress in Core, not a sample-side semaphore workaround. Historical observations do not establish current package behavior. | UC01 capacity-one variant and UC05; current use cases are not marked Blocked on historical evidence. |
+
+Usage-owned work remains in the specifications: varied schedules and burst
+accounting (UC09/UC19), cancellation contract exposure (UC17), explicit lifecycle
+extensions (UC23), and bounded projection/graph/business-data retention (UC25).
+Current continuous operation is already implemented; bounded retention is not.
 
 ## Public package consumption
 

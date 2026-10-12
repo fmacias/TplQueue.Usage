@@ -1,53 +1,13 @@
-# UC15 - Transient failure followed by success
+# UC15 — Transient failure followed by success
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate retrying a job under an existing TplQueue retry policy.
 
-## Thread scope and completion
+**Implementation:** Domain already requests an exponential-backoff policy for Load but has no deliberate transient failure. Add a focused handler/payload variant with a bounded number of failures keyed to stable job/operation identity, and select an existing policy through `IRetryPolicyAbstractFactory`. Simulation submits it through the established workflow. Keep attempt state meaningful across Cache hydration when that variant is included.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** The same job fails a known number of attempts and then succeeds, with no new job ID for retries. Downstream handlers run after successful prerequisite completion and business output is not duplicated. Observer retry counts and eventual terminal state reach the monitor; coalescing need not paint every brief transition.
 
-## Dependencies
+**Dependencies:** Existing Domain handlers, factory retry-policy integration, scheduled delivery and observer retry metadata.
 
-No additional use-case prerequisite.
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate. Fail selected jobs for a configured number of attempts,
-  then succeed under the existing retry abstraction.
-- Verify attempt counts, configured delay policy and eventual completion on the
-  same job identity. Verify no duplicate downstream execution or business output.
-  Inspect retry metadata without requiring every brief transition to be painted.
-
-## Suggested commit
-
-`feat(simulation): add deterministic retry recovery scenarios`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** None identified; use supported retry policies rather than implementing retries in the scheduler.

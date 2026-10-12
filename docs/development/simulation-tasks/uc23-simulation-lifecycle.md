@@ -1,53 +1,13 @@
-# UC23 - Simulation lifecycle
+# UC23 — Simulation lifecycle
 
-Status: pending.
+**Status:** Partially implemented
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate distinct arrival control, job completion and cancellation boundaries.
 
-## Thread scope and completion
+**Implementation:** Single-use Start, idempotent StopAsync, pending-submission completion, timer cleanup and host shutdown already exist in `SimulationService`/`ScheduledWorkflow`. Extend these services and their Usage contracts only for explicit pause-arrivals/resume, finite completion, drain and cancellation scenarios. Keep final Stop terminal; a fresh session is a separate lifecycle decision, not a second Start on the existing object.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Pause-arrivals leaves accepted work running; resume creates no duplicate schedule. Final Stop releases workflow timers and waits for admitted submissions without canceling or draining jobs. A separate drain operation waits for its documented execution boundary, and cancellation requests report observed outcomes. Completion retains its existing meaning of stopped arrivals/submissions. View Pause never controls workloads; host shutdown applies the host token and releases runtime-owned resources.
 
-## Dependencies
+**Dependencies:** Existing session/workflow lifecycle and [UC17](uc17-cancellation-at-different-phases.md) for cancellation extensions.
 
-[P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) and [UC17](uc17-cancellation-at-different-phases.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after P02 and UC17. Exercise start, pause-arrivals,
-  resume, finite completion, drain, cancellation and host shutdown.
-- Verify idempotent lifecycle operations, documented restart semantics, no duplicate
-  schedules, no post-stop accepted submissions, observed callback failures and
-  disposed timers/subscriptions/cancellation resources. Keep view pause separate.
-
-## Suggested commit
-
-`feat(simulation): complete lifecycle and shutdown scenarios`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** No confirmed product blocker. If a requested drain boundary needs unavailable public completion/acknowledgment information, record the API and UC23 under the [README roadmap](../../../README.md#roadmap).

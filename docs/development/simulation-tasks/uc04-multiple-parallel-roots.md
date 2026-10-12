@@ -1,52 +1,13 @@
-# UC04 - Multiple parallel roots
+# UC04 — Multiple parallel roots
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate bounded parallel capacity, queued work and channel reuse.
 
-## Thread scope and completion
+**Implementation:** The host submits recurring roots but has no deliberate capacity-saturating scenario. Add a Simulation workflow targeting the runtime's Parallel queue, using independent Domain roots with readable controlled durations. Submit a bounded set larger than configured `MaxParallelism` and retain admission accounting for every accepted root.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Unrelated roots remain distinct. Available capacity allows overlapping executions while additional work waits. Channels stay within the configured range and become reusable after release; a channel denotes capacity ownership and can include dependency waits. The monitor shows observed positions and backlog without assigning lanes from root IDs.
 
-## Dependencies
+**Dependencies:** [UC02](uc02-sequential-etl-chain.md), existing admission and runtime queue catalog.
 
-[UC02](uc02-sequential-etl-chain.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after UC02. Submit enough independent roots to exercise
-  configured queue capacity and queue additional work.
-- Verify concurrent execution, channels within capacity, no conflicting ownership
-  of a channel, reuse after completion and separation of unrelated roots.
-
-## Suggested commit
-
-`feat(simulation): demonstrate parallel capacity and channel reuse`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** None identified. Do not prescribe a particular channel number or completion order for competing roots.

@@ -1,52 +1,13 @@
-# UC22 - Long execution and idle periods
+# UC22 — Long execution and idle periods
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate observer-driven presentation during long work and quiet arrival periods.
 
-## Thread scope and completion
+**Implementation:** Add a focused Simulation scenario alternating controlled long Domain work with deliberate arrival gaps. Reuse `ScheduledWorkflow`, extending only the arrival pattern needed for the scenario; do not make the session's terminal `StopAsync` act as pause/resume. Preserve the existing projection and JobMonitor refresh path.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Accepted events update accumulated job state. During periods with no new events the live view stays still; the next snapshot advances live time. View Pause/history retain their reference while incoming state updates, and Follow live restores following. No browser polling or redraw timer is required.
 
-## Dependencies
+**Dependencies:** Existing scheduled workflow, observer projection and JobMonitor time controls.
 
-No additional use-case prerequisite.
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate. Alternate finite long-running work and arrival gaps.
-- Verify the monitor refreshes on accepted events, stays still without changes,
-  and resumes on new events. Check Pause/history reference stability during incoming
-  updates and Follow live behavior without introducing periodic redraws.
-
-## Suggested commit
-
-`feat(simulation): demonstrate long-running and idle intervals`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** None identified. Arrival gaps and handler durations are sample behavior.

@@ -1,52 +1,13 @@
-# UC13 - Cross-queue ownership variants
+# UC13 — Cross-queue ownership variants
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate how submission order affects a shared job's execution owner.
 
-## Thread scope and completion
+**Implementation:** Reuse UC10's Domain graphs and Simulation submission path. Add separate bounded variants for reversed ordered submissions and concurrent submissions, each with fresh job identities. Keep concurrency local to the scenario and account for every accepted root; do not create replacement queues.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Ordered variants show the owner selected by the public enqueue contract. In the race variant either queue may win, but the shared job has one actual execution owner and one node. The monitor displays observed ownership and real dependencies without predicting a race winner.
 
-## Dependencies
+**Dependencies:** [UC10](uc10-two-queue-shared-dependency.md).
 
-[UC10](uc10-two-queue-shared-dependency.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after UC10. Reverse enqueue order, then add a bounded
-  concurrent-submission variant.
-- Verify the controlled-order winner and, for the race, exactly one actual owner
-  without assuming which queue wins. Render the observed owner and execute once.
-
-## Suggested commit
-
-`feat(simulation): exercise cross-queue ownership ordering`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** No additional blocker identified beyond UC10's public ownership/binding constraints; report violations under the [README roadmap](../../../README.md#roadmap).

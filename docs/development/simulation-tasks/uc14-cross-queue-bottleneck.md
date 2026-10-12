@@ -1,53 +1,13 @@
-# UC14 - Cross-queue bottleneck
+# UC14 — Cross-queue bottleneck
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate waiting on a slow prerequisite owned by another queue.
 
-## Thread scope and completion
+**Implementation:** Reuse UC10's supported graph with a controlled slow Domain handler and a bounded set of consumer roots. Simulation uses the existing admission/runtime path and queue capacities. Include independent work to make available versus occupied capacity observable; keep the dependency graph acyclic.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Consumers cannot bypass the prerequisite and progress after it completes. Unrelated jobs follow the runtime's capacity rules; dependency waiting can occupy a channel. The monitor shows actual queue boundaries and waiting/completed states without claiming that channel ownership means handler execution.
 
-## Dependencies
+**Dependencies:** [UC10](uc10-two-queue-shared-dependency.md).
 
-[UC10](uc10-two-queue-shared-dependency.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after UC10. Delay an externally owned prerequisite
-  while several consumers wait under bounded queue capacities.
-- Verify consumers do not bypass the prerequisite, unrelated work follows runtime
-  capacity rules, and all consumers progress once the bottleneck clears. Use a
-  bounded timeout to detect stalls; do not build accidental cyclic waits.
-
-## Suggested commit
-
-`feat(simulation): demonstrate cross-queue bottlenecks`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** No confirmed additional limitation. If a supported acyclic composition stalls because of product capacity semantics, record the behavior and UC14 in the [README roadmap](../../../README.md#roadmap).

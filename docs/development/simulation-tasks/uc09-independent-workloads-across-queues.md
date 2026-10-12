@@ -1,52 +1,13 @@
-# UC09 - Independent workloads across queues
+# UC09 — Independent workloads across queues
 
-Status: pending.
+**Status:** Partially implemented
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate independent arrivals and root identities across queue types.
 
-## Thread scope and completion
+**Implementation:** ETL and SingleJob already run together, each with one timer spanning all three queues. Remaining work is deliberately different queue/workflow intervals and offsets. Extend the existing `ScheduledWorkflow` scheduling and queue-selection inputs only enough for these scenarios, preserving current defaults and singleton runtime identity. The earlier 2/3/5-second intervals are a possible demonstration, not existing configuration.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Different schedules produce independent accepted-root counts and fresh graph identities. Queue-local channels and observed queue ownership remain separate from scenario identity. Capacity skips affect delivery rather than creating phantom jobs. Additional browsers observe the same session without multiplying arrivals.
 
-## Dependencies
+**Dependencies:** [UC01](uc01-single-job-on-each-queue.md), [UC02](uc02-sequential-etl-chain.md), and UC05's existing Cache success path. [UC03](uc03-multiple-fifo-roots.md)/[UC04](uc04-multiple-parallel-roots.md) supply optional backlog variants.
 
-[UC01](uc01-single-job-on-each-queue.md), [UC02](uc02-sequential-etl-chain.md), [UC03](uc03-multiple-fifo-roots.md), [UC04](uc04-multiple-parallel-roots.md), [UC05](uc05-cache-backed-etl.md) and finite schedules from [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after UC01-UC05. Enable finite scenario schedules with
-  different intervals and initial offsets, initially 2/3/5 seconds.
-- Verify independent delivery counts, unique run identities, correctly separated
-  root graphs, and no new workloads when another browser connects.
-
-## Suggested commit
-
-`feat(simulation): schedule independent queue workloads`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** None identified; missing schedule configuration is a Usage concern.

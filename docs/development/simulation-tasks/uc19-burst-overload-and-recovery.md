@@ -1,52 +1,13 @@
-# UC19 - Burst, overload and recovery
+# UC19 — Burst, overload and recovery
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate bounded admission while arrival demand exceeds queue service capacity.
 
-## Thread scope and completion
+**Implementation:** Extend the existing scheduled admission logic for a bounded burst and then a bounded period of faster arrivals, using UC03/UC04 Domain workloads. Account for each accepted root; the current `Submit` hook returns only one root ID, so batch delivery must extend that accounting rather than hide several roots behind one ID. Keep skip-on-busy/capacity behavior and no catch-up backlog.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Accepted work forms a visible queue backlog while skipped attempts create no jobs. Delivery counters distinguish ticks with skips/failures from job counts. After arrivals stop, accepted jobs can finish and capacity becomes available. Every run is limited in size and duration; this is a load demonstration, not unbounded pressure.
 
-## Dependencies
+**Dependencies:** [UC03](uc03-multiple-fifo-roots.md), [UC04](uc04-multiple-parallel-roots.md), and existing scheduled admission.
 
-[UC03](uc03-multiple-fifo-roots.md), [UC04](uc04-multiple-parallel-roots.md) and the admission bounds in [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after UC03/UC04 and P02 bounds. Submit finite bursts,
-  then finite arrivals faster than service, and finally stop arrivals to drain.
-- Verify admission bounds, skipped-tick counts, visible backlog growth and recovery.
-  Distinguish skipped submissions from accepted jobs. Do not enable unbounded load.
-
-## Suggested commit
-
-`feat(simulation): add bounded burst and overload scenarios`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** None identified; admission accounting belongs to Usage.

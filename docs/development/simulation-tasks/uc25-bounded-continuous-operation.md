@@ -1,57 +1,13 @@
-# UC25 - Bounded continuous operation
+# UC25 — Bounded continuous operation
 
-Status: pending.
+**Status:** Partially implemented
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate continuous queue work with bounded sample history and memory ownership.
 
-## Thread scope and completion
+**Implementation:** Continuous workflows and active-run admission already exist. Remaining work spans Simulation's accepted-root lists and graph catalog, the host projection's jobs/event fingerprints, and Domain measurements/summaries. Define a coherent Usage retention policy for completed graphs, shared dependencies and late events; reuse `IEtlExecutionDataStore.Remove` where safe and add only the missing sample cleanup contracts. Define a global active-work bound as additional workflows are registered.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Retained completed history reaches a configured bound while active graphs and dependencies needed by active consumers remain intact. Eviction treats shared nodes coherently, handles selection of retired jobs, and prevents late/duplicate events from recreating unlimited expired history. Snapshots remain bounded by explicit active and retained limits. Existing continuous arrivals and Stop semantics remain available.
 
-## Dependencies
+**Dependencies:** Existing continuous delivery/admission; [UC12](uc12-one-prerequisite-shared-by-several-roots.md) for shared-root retention, [UC19](uc19-burst-overload-and-recovery.md) for pressure scenarios, and UC23's existing stop lifecycle. Retention horizon/count and late-event policy remain to be selected.
 
-[UC12](uc12-one-prerequisite-shared-by-several-roots.md), [UC19](uc19-burst-overload-and-recovery.md), [UC23](uc23-simulation-lifecycle.md) and the retention decision in the main plan.
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after UC12, UC19 and UC23 plus the retention decision.
-  Bound active runs, completed history, event fingerprints and sample business data.
-- Retain active graphs and shared dependencies while any active consumer needs them.
-  Evict completed graph history coherently, handle selection of retired jobs, and
-  prevent late/duplicate events from recreating unbounded expired history. Define
-  the bounded late-event policy explicitly.
-- Run beyond several retention cycles and verify retained counts and memory trends
-  stabilize, active graphs remain intact and shutdown cleans up. Record duration,
-  throughput and environment. Only then enable optional continuous operation.
-
-## Suggested commit
-
-`feat(simulation): bound continuous workload history and retention`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** No confirmed product blocker; current unbounded Usage collections are sample-owned. Record any additional public API requirement and blocked UC25 variant in the [README roadmap](../../../README.md#roadmap).

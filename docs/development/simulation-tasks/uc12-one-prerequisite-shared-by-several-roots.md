@@ -1,52 +1,13 @@
-# UC12 - One prerequisite shared by several roots
+# UC12 — One prerequisite shared by several roots
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate shared work consumed by several independently identifiable roots.
 
-## Thread scope and completion
+**Implementation:** Extend the supported UC10 Domain composition to a small, explicit number of consumers, initially three roots sharing one prerequisite. Register every root before submissions so `ISimulationGraphCatalog` retains all memberships. Reuse the existing multi-root DTO mapping and graph-focus behavior; no new global run ID or duplicated shared node is required.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** The minimal topology has four globally unique jobs, three roots and three edges. Each root reaches two jobs, while global counts include the shared prerequisite only once. Membership remains stable across running and terminal outcomes; selection follows the connected dependency graph, and completion order cannot overwrite other memberships.
 
-## Dependencies
+**Dependencies:** [UC10](uc10-two-queue-shared-dependency.md) and the existing graph catalog.
 
-[UC10](uc10-two-queue-shared-dependency.md) and the shared-membership decision in [P03](p03-establish-graph-identity-for-all-outcomes.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after UC10 and the P03 membership decision. Give several
-  roots the same prerequisite instance and distinct run/root membership information.
-- Verify a single execution/node, all consumer edges and stable selection before
-  and after completion. Completion order must not silently overwrite membership.
-
-## Suggested commit
-
-`feat(simulation): cover dependencies shared by multiple roots`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** Subject to UC10's supported root-binding shape. Any blocking limitation belongs in the [README roadmap](../../../README.md#roadmap) with UC12 identified.

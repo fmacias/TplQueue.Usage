@@ -1,53 +1,13 @@
-# UC21 - Very short jobs and clustered starts
+# UC21 — Very short jobs and clustered starts
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate fast queue work and inspection of dense observed timestamps.
 
-## Thread scope and completion
+**Implementation:** The monitor already supports grouping, counts and interval inspection; the sample has no dedicated short-job workload. Add a bounded Simulation scenario using small-duration Domain handlers and UC04's capacity setup. Reuse existing JobMonitor layout and selection behavior without changing observed timestamps.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** Many short jobs can produce closely spaced starts, accurate unique job counts, grouped markers and selectable individual jobs. Enqueue and Started markers remain two positions of one job. Real execution does not guarantee identical timestamps; coalescing may show a terminal state without painting every intermediate state.
 
-## Dependencies
+**Dependencies:** [UC04](uc04-multiple-parallel-roots.md) and existing JobMonitor grouping.
 
-[UC04](uc04-multiple-parallel-roots.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate after UC04. Deliver a bounded set of very short jobs.
-- Verify grouping, count accuracy, individual selection, zoom and retained enqueue
-  history. Use deterministic monitor fixtures for exact timestamp collisions;
-  real timers do not guarantee same-millisecond timestamps. Never shift timestamps
-  simply to separate markers.
-
-## Suggested commit
-
-`feat(simulation): exercise dense job timing and inspection`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** None identified.

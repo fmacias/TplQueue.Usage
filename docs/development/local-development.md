@@ -1,5 +1,9 @@
 # Local development
 
+This is an operational reference for the human developer, separate from the
+[use-case specifications](simulation-use-case-plan.md). It does not assign build,
+test, packaging or repository administration steps to a scenario implementation.
+
 Run the standalone TplQueue.Usage scripts to validate product packages. Loading
 projects through WorkspaceTplQueue can switch some references to sibling source,
 which is a separate maintainer workflow.

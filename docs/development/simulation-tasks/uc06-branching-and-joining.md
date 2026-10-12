@@ -1,53 +1,13 @@
-# UC06 - Branching and joining
+# UC06 — Branching and joining
 
-Status: pending.
+**Status:** Pending
 
-[Back to the task checklist](../simulation-use-case-plan.md#task-checklist)
+**Purpose:** Demonstrate a root that depends on multiple prerequisite branches.
 
-## Thread scope and completion
+**Implementation:** Add a Domain graph-factory method exposed through a small Contracts extension, with two to four branches converging on a final root and five to ten unique jobs. Give branch outputs distinct business keys so the join can consume all required results. A Simulation workflow requests and submits this graph through existing runtime and scheduling services; register any new cache payload types and handlers when supporting Cache.
 
-Execute only this task in this thread. Follow the main plan's
-[one-task-per-thread workflow](../simulation-use-case-plan.md#one-task-per-thread).
-After acceptance passes, update this task's status and execution record, check its
-entry in the main plan, and include those updates in the local task commit(s).
-Verify the commits succeeded before reporting completion. If blocked, record the
-blocker and leave the main checkbox unchecked. End with commit hashes, validation
-results and the next eligible task's file path and prompt for a new thread.
-Stop there; do not start another task or push commits.
+**Expected behavior:** The final handler runs only after every required branch completes. The monitor shows actual dependency edges and one composed root membership for all nodes. Branch topology permits concurrency only to the extent supported by the selected queue; it does not itself guarantee parallel execution.
 
-## Dependencies
+**Dependencies:** Existing Domain factory, graph catalog, projection and scheduled admission; [graph sizing](../simulation-use-case-plan.md#graph-sizing).
 
-Graph-size agreement from [P00](p00-record-decisions-and-establish-baseline.md).
-
-Start with the decisions and baseline from [P00](p00-record-decisions-and-establish-baseline.md).
-Use [P02](p02-add-finite-timer-driven-delivery-and-minimal-contracts.md) for recurring delivery and [P03](p03-establish-graph-identity-for-all-outcomes.md) before claiming
-complete graph identification. P01 may be deferred.
-
-## Scope and acceptance
-
-- [ ] Implement and validate. Build 2-4 independent prerequisite branches converging
-  on a final root; initially keep the graph within 5-10 unique jobs.
-- Verify every required branch completes before the join handler executes, distinct
-  dependency edges and root highlighting. Separate graph topology from actual
-  parallelism, which remains governed by the selected queue.
-
-## Suggested commit
-
-`feat(simulation): add branching and joining graphs`
-
-## Working rules and validation
-
-Read the [main plan](../simulation-use-case-plan.md) before starting. Its
-[common implementation rules](../simulation-use-case-plan.md#common-implementation-rules),
-[iteration workflow](../simulation-use-case-plan.md#iteration-workflow-and-definition-of-done),
-[validation entry points](../simulation-use-case-plan.md#validation-entry-points) and
-[additional automated coverage](../simulation-use-case-plan.md#additional-automated-coverage)
-apply to this task. Resolve only decisions needed by this task and include the
-relevant tests, documentation and acceptance evidence in the same iteration.
-
-## Execution record
-
-Pending. When work starts, copy the main plan's
-[iteration record template](../simulation-use-case-plan.md#iteration-record) here.
-Record exact checks, outcomes, skipped checks and blockers. Update the task status
-and the main checklist together; mark complete only after acceptance passes.
+**Product limitations:** None identified. Use supported graph construction and keep cyclic graphs outside the scenario.

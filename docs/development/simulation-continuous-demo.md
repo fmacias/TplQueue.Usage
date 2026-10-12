@@ -1,5 +1,10 @@
 # Continuous combined demo follow-up
 
+> Historical record only. The dated implementation and execution details below
+> describe earlier revisions, not active instructions or current acceptance.
+> Use the [architecture guide](../architecture/blazor-consumer-sample.md) and
+> [use-case catalog](simulation-use-case-plan.md) for current behavior and scope.
+
 Date: 2026-09-28. Baseline: UC01 commit `7344cd7`.
 
 The human explicitly requested ETL and single jobs together, continuing until a
@@ -38,15 +43,15 @@ guidance describe repository-local Domain ownership and fixed continuous deliver
 
 Validation against local packages, from the Usage repository root:
 
-| Check | Result |
-| --- | --- |
-| `.\build.ps1 -Configuration Debug` | Passed; seven existing test warnings, no errors |
-| `.\test.ps1 -Configuration Debug` | 151 passed, no failures; the subsequent coverage run also passed all 151 tests |
-| `dotnet run --no-build --no-restore --configuration Debug --project samples/PackageConsumptionSmokeConsole/PackageConsumptionSmokeConsole.csproj -- all` | All six smoke modes passed |
-| `.\coverage.ps1 -Configuration Debug -NoBuild -NoRestore -EnforceBaseline` | Tests passed; coverage gate failed at 92.91%, below 93.5%. Threshold unchanged |
-| MSBuild property and PackageReference evaluation | All 16 default/override evaluations passed across eight projects; no alternate packages restored |
-| JobMonitor syntax and layout checks | 15 modules checked and 26 tests passed on 2026-10-06 |
-| Changed documentation links and whitespace | 100 local links/anchors checked; unstaged diff check passed |
+| Check                                                                                                                                                    | Result                                                                                           |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `.\build.ps1 -Configuration Debug`                                                                                                                       | Passed; seven existing test warnings, no errors                                                  |
+| `.\test.ps1 -Configuration Debug`                                                                                                                        | 151 passed, no failures; the subsequent coverage run also passed all 151 tests                   |
+| `dotnet run --no-build --no-restore --configuration Debug --project samples/PackageConsumptionSmokeConsole/PackageConsumptionSmokeConsole.csproj -- all` | All six smoke modes passed                                                                       |
+| `.\coverage.ps1 -Configuration Debug -NoBuild -NoRestore -EnforceBaseline`                                                                               | Tests passed; coverage gate failed at 92.91%, below 93.5%. Threshold unchanged                   |
+| MSBuild property and PackageReference evaluation                                                                                                         | All 16 default/override evaluations passed across eight projects; no alternate packages restored |
+| JobMonitor syntax and layout checks                                                                                                                      | 15 modules checked and 26 tests passed on 2026-10-06                                             |
+| Changed documentation links and whitespace                                                                                                               | 100 local links/anchors checked; unstaged diff check passed                                      |
 
 The coverage filter includes the test assembly and Fmacias.TplQueue assemblies;
 it does not measure the separately built TplQueue.Sample.Domain and Simulation
@@ -85,15 +90,15 @@ Source flags:
 Test project:
 `TplQueue.Usage/test/integration/Fmacias.TplQueue.Usage.Integration.Test/Fmacias.TplQueue.Usage.Integration.Test.csproj`.
 
-| Command from workspace root | Result |
-| --- | --- |
-| `dotnet test <test-project> --configuration Debug --no-restore <source-flags> --filter FullyQualifiedName~DefaultDashboard_OffersStopAndContinuesBothWorkloadsBeyondTwoTicks --logger 'trx;LogFileName=continuous-red.trx' --results-directory out/simulation-continuous` | Expected failure before implementation: no Stop control in the old default host. |
-| `dotnet build <test-project> --configuration Debug --no-restore <source-flags>` | Pass, seven existing test warnings and no errors. |
-| `dotnet test <test-project> --configuration Debug --no-build --no-restore --filter 'FullyQualifiedName~FiniteScenarioDeliveryTests\|FullyQualifiedName~TplQueueSampleBlazorSignalRSampleTests\|FullyQualifiedName~SingleJobSimulationTests\|FullyQualifiedName~SimulationHostedServiceTests' --logger 'trx;LogFileName=continuous-focused.trx' --results-directory out/simulation-continuous` | 32 pass. Use literal OR separators without backslashes in PowerShell. |
-| `dotnet build WorkspaceTplQueue/WorkspaceTplQueue.sln --configuration Debug --no-restore -m:1 -nr:false -p:SkipPackLocal=true` | Pass after adding real-queue stop/drain coverage; seven existing warnings, no errors. |
-| `dotnet test WorkspaceTplQueue/WorkspaceTplQueue.sln --configuration Debug --no-build --no-restore -m:1 -nr:false --logger 'trx;LogFilePrefix=continuous-workspace' --results-directory C:/Users/Fernando/source/fmacias/out/simulation-continuous` | 680 pass, one existing SignalR cancellation case fails in the sandbox: `Cancel_Run_CancelsCollection_AndSkipsRootSuccess`. All changed-scope tests pass, including the new combined stop/drain test. P02 records the same sandbox limitation. |
-| `node --check TplQueue.Usage/tools/TplQueue.JobMonitor/tests/blazor.js` | Pass with Visual Studio's Node executable. |
-| `powershell -NoProfile -ExecutionPolicy Bypass -File out/simulation-continuous/browser-live.ps1` | Not executed: automatic approval review repeatedly disconnected before completing the review. Interactive Stop/multi-circuit acceptance remains unverified. |
+| Command from workspace root                                                                                                                                                                                                                                                                                                                                                                   | Result                                                                                                                                                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `dotnet test <test-project> --configuration Debug --no-restore <source-flags> --filter FullyQualifiedName~DefaultDashboard_OffersStopAndContinuesBothWorkloadsBeyondTwoTicks --logger 'trx;LogFileName=continuous-red.trx' --results-directory out/simulation-continuous`                                                                                                                     | Expected failure before implementation: no Stop control in the old default host.                                                                                                                                                              |
+| `dotnet build <test-project> --configuration Debug --no-restore <source-flags>`                                                                                                                                                                                                                                                                                                               | Pass, seven existing test warnings and no errors.                                                                                                                                                                                             |
+| `dotnet test <test-project> --configuration Debug --no-build --no-restore --filter 'FullyQualifiedName~FiniteScenarioDeliveryTests\|FullyQualifiedName~TplQueueSampleBlazorSignalRSampleTests\|FullyQualifiedName~SingleJobSimulationTests\|FullyQualifiedName~SimulationHostedServiceTests' --logger 'trx;LogFileName=continuous-focused.trx' --results-directory out/simulation-continuous` | 32 pass. Use literal OR separators without backslashes in PowerShell.                                                                                                                                                                         |
+| `dotnet build WorkspaceTplQueue/WorkspaceTplQueue.sln --configuration Debug --no-restore -m:1 -nr:false -p:SkipPackLocal=true`                                                                                                                                                                                                                                                                | Pass after adding real-queue stop/drain coverage; seven existing warnings, no errors.                                                                                                                                                         |
+| `dotnet test WorkspaceTplQueue/WorkspaceTplQueue.sln --configuration Debug --no-build --no-restore -m:1 -nr:false --logger 'trx;LogFilePrefix=continuous-workspace' --results-directory C:/Users/Fernando/source/fmacias/out/simulation-continuous`                                                                                                                                           | 680 pass, one existing SignalR cancellation case fails in the sandbox: `Cancel_Run_CancelsCollection_AndSkipsRootSuccess`. All changed-scope tests pass, including the new combined stop/drain test. P02 records the same sandbox limitation. |
+| `node --check TplQueue.Usage/tools/TplQueue.JobMonitor/tests/blazor.js`                                                                                                                                                                                                                                                                                                                       | Pass with Visual Studio's Node executable.                                                                                                                                                                                                    |
+| `powershell -NoProfile -ExecutionPolicy Bypass -File out/simulation-continuous/browser-live.ps1`                                                                                                                                                                                                                                                                                              | Not executed: automatic approval review repeatedly disconnected before completing the review. Interactive Stop/multi-circuit acceptance remains unverified.                                                                                   |
 
 Node executable:
 `C:/Program Files/Microsoft Visual Studio/18/Community/MSBuild/Microsoft/VisualStudio/NodeJs/node.exe`.
@@ -137,3 +142,23 @@ Packaging is not applicable because no product package changes. Standalone packa
 build/test/coverage remain subject to the known P01-P03 dependency mismatch; this is
 source validation. No product fixes, schema generation, retention subsystem,
 restart action or new use-case completion claim is included.
+
+## UC01 completed milestone
+
+UC01 was completed in September 2026, with the final checkpoint on September 28.
+It introduced independent ingest roots on FIFO, Parallel and Cache, reusing
+measurement collection, the 500 ms ingest handler and Cache payload hydration.
+Each root had fresh job/operation identity and no composed prerequisites. Its
+earlier finite single-job profile produced six roots and six jobs over two ticks.
+
+The lasting presentation decisions were one global job identity, retained enqueue
+history plus the actual Started position, and observed channel reuse. The original
+record observed a capacity-one Cache stall and a successful capacity-two variant;
+that historical finding neither proves a current package defect nor justifies a
+sample workaround. It is tracked in the [README Roadmap](../../README.md#roadmap).
+
+UC01 remains completed. The current host runs SingleJob and ETL together using
+continuous workflows; the former profile selector and finite settings are gone.
+The [active UC01 specification](simulation-tasks/uc01-single-job-on-each-queue.md)
+describes the implementation now. P00–P03 retain concise historical summaries in
+the [milestone catalog](simulation-use-case-plan.md#completed-milestones).

@@ -21,6 +21,7 @@ The SignalR dashboard sample is the runnable reference implementation for the ob
 ## Blazor Interactive Server sample
 
 - [Blazor architecture, execution channels and contract ownership](blazor-consumer-sample.md)
+- [Blazor sample component diagram (PlantUML)](blazor-sample-components.puml)
 - [Historical ScatterChart implementation snapshot](blazor-signalr-current-state.md)
 
 The Blazor ETL timeline uses an in-process projection and the built-in circuit.

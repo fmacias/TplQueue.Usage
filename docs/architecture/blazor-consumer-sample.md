@@ -1,9 +1,14 @@
 # Blazor frontend architecture and contract ownership
 
-This is the maintained guide for `TplQueue.Sample.BlazorSignalR` and its ETL
-integration. The supplied JobMonitor instructions replace the former ScatterChart
-direction. The current frontend is the reusable JavaScript `<job-queue-timeline>`
-under [tools/TplQueue.JobMonitor](../../tools/TplQueue.JobMonitor/README.md).
+This guide describes the current source implementation of
+`TplQueue.Sample.BlazorSignalR` and its Domain, Contracts and Simulation integration.
+Source and supported public API contracts take precedence over historical plans.
+The frontend is the reusable JavaScript `<job-queue-timeline>` under
+[tools/TplQueue.JobMonitor](../../tools/TplQueue.JobMonitor/README.md).
+
+The [PlantUML component diagram](blazor-sample-components.puml) distinguishes direct
+project/package references from runtime and asset integration. Future scenarios
+are specified in the [use-case catalog](../development/simulation-use-case-plan.md).
 
 ## Current host and ownership
 
@@ -19,6 +24,32 @@ See [local development](../development/local-development.md) for feed setup.
 | `TplQueue.Sample.Simulation` | Measurements, scheduling, admission, graph membership and runtime access; references Contracts, without a Domain source dependency |
 | `TplQueue.Sample.BlazorSignalR` | .NET 8 Interactive Server host, composition, observer projection and presentation; references the three local sample projects plus Core and DI packages |
 
+These relationships come from the four current project files:
+[BlazorSignalR](../../samples/TplQueue.Sample.BlazorSignalR/TplQueue.Sample.BlazorSignalR.csproj),
+[Domain](../../samples/TplQueue.Sample.Domain/TplQueue.Sample.Domain.csproj),
+[Etl.Contracts](../../samples/TplQueue.Sample.Etl.Contracts/TplQueue.Sample.Etl.Contracts.csproj),
+and [Simulation](../../samples/TplQueue.Sample.Simulation/TplQueue.Sample.Simulation.csproj).
+Domain, Contracts and Simulation target `netstandard2.0`. Contracts and Simulation
+explicitly select C# 9; Domain inherits C# 12 from `Directory.Build.props`.
+Simulation also directly references Microsoft DI and Logging Abstractions 9.0.8.
+All direct TplQueue package versions use the shared `TplQueuePackageVersion` property.
+
+### Shared contract responsibility
+
+`TplQueue.Sample.Etl.Contracts` is the shared contract boundary for Domain,
+Simulation and their consumers. Alongside measurement and payload contracts it
+contains `ISampleJobFactory`, queue/cache wrapper interfaces, `IEtlQueueRuntime`,
+`ISimulationWorkflow`, `ISimulationService`, `ISimulationGraphCatalog` and delivery
+DTOs. Its responsibility already extends beyond ETL. Browser-specific
+`JobMonitorSnapshot` and `EtlDashboardSnapshot` remain owned by the Blazor host.
+
+`TplQueue.Sample.Contracts` would express this broader responsibility more clearly.
+That is a future naming proposal, not an applied project/assembly/namespace rename
+or a prerequisite for a use case. Keep the current dependency direction and avoid
+moving Domain implementations into Contracts.
+
+### Composition and queue identity
+
 `Program.cs` calls `AddTplQueue`, `AddSampleDomain`, `AddSampleEtlWorkflow`,
 `AddSampleSingleJobSimulation` and `AddMeasurementEtlConsumer`. After building the
 host, it calls `RegisterSampleEtlPayloadHandlers`. These existing composition
@@ -32,7 +63,7 @@ They do not resolve another set of transient wrappers. Queue option names remain
 constructors for System.Text.Json hydration and an explicit type allowlist.
 
 Factory overloads copy caller-supplied measurements into immutable payloads. The
-host's measurement source supplies the workflow batches. Domain is sample code,
+Simulation-owned `SampleMeasurementSource` supplies the workflow batches. Domain is sample code,
 not a product package or a new documentation publishing source. Adapter's language
 trees remain the public product-documentation source.
 
@@ -63,6 +94,12 @@ The old finite delivery, scenario settings, `IEtlWorkflow` and scenario classes
 have been removed from the current sample. They are not retained under a runtime
 `Legacy/` folder. The test-only legacy ScatterChart mapper is a separate retained artifact.
 
+The [scheduled workflow](../../samples/TplQueue.Sample.Simulation/Workflows/ScheduledWorkflow.cs)
+is the extension point for recurring scenarios. Its current `Submit` hook returns
+one root ID, and its timer iterates all `AvailableQueue` values. Queue-specific
+schedules or bursts need small explicit extensions to this infrastructure and its
+admission accounting, not a second scheduler or a new workflow language.
+
 ### Continuous combined demo
 
 The host registers both workflows directly. Timing is fixed in ScheduledWorkflow:
@@ -91,10 +128,18 @@ cancels only that circuit's completion wait. Opening another browser cannot rest
 delivery; restart the server for a fresh session. Pause freezes only viewing time.
 
 History, event fingerprints, graph membership, accepted-root lists and business
-measurements/summaries accumulate for the process lifetime. Admission is bounded;
-retention is not. UC23's broader lifecycle work and UC25's bounded retention remain
-pending. The [continuous-demo record](../development/simulation-continuous-demo.md)
-preserves historical validation separately from the current package migration.
+measurements/summaries accumulate for the process lifetime. Admission is bounded
+per workflow and queue; retention is not. UC23 and UC25 are partially implemented:
+broader lifecycle controls and coordinated retention remain to be added. The
+[continuous-demo record](../development/simulation-continuous-demo.md) preserves
+history separately from active specifications.
+
+`EtlQueueRuntime` internally offers `Cancel(Guid)` and retains linked per-root
+cancellation sources, but `IEtlQueueRuntime` currently exposes only enqueue,
+queue access, polling, observation and active-root inspection. UC17 needs a small
+Usage contract extension to reach cancellation through normal composition.
+Neither the session nor the dashboard currently offers per-root cancellation,
+pause-arrivals/resume or a drain operation.
 
 ### Finite scenario delivery
 
@@ -124,11 +169,11 @@ captures all reachable job IDs before enqueue can publish observations, hydrate
 cache objects or add FIFO ordering edges. Each composed root ID identifies one
 run in the current one-root-per-run model; no second run GUID is necessary.
 The catalog retains IDs only, uses a lock for atomic registration and reads, and
-survives terminal outcomes for the finite host lifetime. It does not assign queues,
+survives terminal outcomes for the process session. It does not assign queues,
 channels, timestamps, status or scenario execution facts. Membership remains on
 submission exceptions because a queue may already have published events; it is
-not proof that enqueue succeeded. Admission and accepted-root counters retain
-their separate P02 meaning.
+not proof that enqueue succeeded. Admission and accepted-root counters track
+successful runtime submissions separately.
 
 The projection joins event-observed jobs to that catalog when making a detached
 snapshot. It creates no jobs, enqueue timestamps or lifecycle events from catalog
@@ -150,8 +195,10 @@ Selection follows explicit dependency edges in both directions for all outcomes.
 Selecting a shared prerequisite or either connected root highlights the whole
 connected graph. FIFO ordering edges remain visible but do not merge composed run
 memberships. Root lists never choose execution channels or synthesize edges.
-Future multi-root scenario IDs and bounded continuous retention require their
-own acceptance tasks; this catalog is process-local and not restart-durable.
+Shared membership support does not mean a runnable shared/cross-queue workflow
+already exists. The current factory supplies only independent ingest roots and
+three-job ETL chains; UC06–UC18 specify additional graph/outcome scenarios.
+This catalog is process-local and not restart-durable; UC25 covers retention.
 
 ```text
 queue execution capacity and lifecycle snapshots
@@ -287,33 +334,12 @@ it is not part of the host or its browser contract.
 
 ## Validation
 
-From the TplQueue.Usage repository root, validate package consumption with:
-
-```powershell
-.\build.ps1 -Configuration Debug
-.\test.ps1 -Configuration Debug
-```
-
-From `tools/TplQueue.JobMonitor`:
-
-```powershell
-node scripts/check.mjs
-node --test tests/layout.test.js
-node demo/server.mjs
-```
-
-The standalone browser harness is `/tests/browser.html` on the demo server.
-The Debug Blazor host serves `/job-monitor/tests/blazor.html?profile=combined` for actual circuit,
-channel/selection and navigation/disposal acceptance; it is excluded from publish.
-HTTP prerender smoke tests alone do not establish interactive browser behavior.
-Report exact commands, results and any unverified acceptance separately.
-
-Channel tests cover concurrent uniqueness, range, stability, release after
-completion/failure/cancellation, FIFO zero and independent queues. Projection
-tests cover nullable legacy channels, late-event enrichment, invalid channels,
-detached snapshots and presentation-only serialization. Tests follow the current
-Domain/Simulation interfaces; historical finite-profile tests are not current
-acceptance evidence.
+The human developer owns runtime validation. Relevant entry points are documented
+in the [local development reference](../development/local-development.md),
+[sample README](../../samples/TplQueue.Sample.BlazorSignalR/README.md) and
+[JobMonitor guide](../../tools/TplQueue.JobMonitor/README.md). Existing source
+fixtures and historical results do not constitute fresh runtime acceptance.
+HTTP/prerender checks do not establish interactive circuit behavior.
 
 ## Remaining boundaries and future work
 
@@ -322,6 +348,11 @@ not a durable spool or replayable event log. Projection retention is currently
 unbounded for the process session; a continuous production stream needs explicit
 retention and snapshot sizing. Observer delivery remains asynchronous and
 best-effort. WaitAsync does not wait for observers or cache acknowledgment.
+
+Future implementations stay in Usage. Product requirements belong in the sample's
+[README Roadmap](../../README.md#roadmap), with motivation, affected public API or
+behavior and the blocked use-case ID. Existing sample gaps, including retention
+and cancellation interface exposure, do not by themselves justify product changes.
 
 Contract generation is a future option, not an existing provenance claim. A
 future TypeScript/Angular consumer should use reviewed transport contracts and

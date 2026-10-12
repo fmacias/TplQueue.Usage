@@ -1,0 +1,74 @@
+@startuml
+title TplQueue Blazor sample — current source and integration boundaries
+left to right direction
+skinparam componentStyle rectangle
+skinparam shadowing false
+
+package "TplQueue.Usage — sample source projects" {
+  component "TplQueue.Sample.BlazorSignalR\nnet8.0\nHost / composition\nObserver projection / presentation" as Host
+  component "TplQueue.Sample.Domain\nnetstandard2.0\nJob / graph factories, payloads, handlers\nBusiness store, queue / cache wrappers" as Domain
+  component "TplQueue.Sample.Etl.Contracts\nnetstandard2.0\nShared sample interfaces and DTOs" as Contracts
+  component "TplQueue.Sample.Simulation\nnetstandard2.0\nWorkflows / scheduled admission\nSession, queue runtime, graph catalog" as Simulation
+}
+
+package "External packages — direct references only" {
+  component "Fmacias.TplQueue.Core" as Core
+  component "Fmacias.TplQueue.Microsoft.DependencyInjection" as DI
+  component "Fmacias.TplQueue.Cache.MemCache" as MemCache
+  component "Fmacias.TplQueue.Abstractions" as Abstractions
+  component "Microsoft.Extensions.DependencyInjection.Abstractions\n9.0.8" as MsDI
+  component "Microsoft.Extensions.Logging.Abstractions\n9.0.8" as MsLog
+}
+
+component "tools/TplQueue.JobMonitor\nMaintained Web Component / JS bridge assets" as Assets
+component "Browser\njob-queue-timeline\nPer-view selection / time / viewport" as Browser
+
+Host --> Domain : ProjectReference
+Host --> Contracts : ProjectReference
+Host --> Simulation : ProjectReference
+Domain --> Contracts : ProjectReference
+Simulation --> Contracts : ProjectReference
+
+Host --> Core : PackageReference
+Host --> DI : PackageReference
+Domain --> MemCache : PackageReference
+Contracts --> Abstractions : PackageReference
+Simulation --> MsDI : PackageReference
+Simulation --> MsLog : PackageReference
+
+Host ..> Simulation : Subscribe observer, then Start\nStopAsync on host shutdown / user stop
+Simulation ..> Domain : DI implementations via Contracts\nISampleJobFactory and queue wrappers
+Simulation ..> Host : IJobEvent from runtime-owned queues\nMembership via ISimulationGraphCatalog
+Assets ..> Host : MSBuild synchronizes assets\ninto ignored wwwroot/job-monitor
+Host ..> Browser : Blazor Interactive Server circuit\nDetached JobMonitorSnapshot via JS interop
+Browser ..> Host : Selection callback / Stop arrivals control
+
+note bottom of Simulation
+  One System.Threading.Timer per ScheduledWorkflow.
+  Singleton IEtlQueueRuntime holds the actual queues.
+  Simulation has no Domain ProjectReference.
+  Stop/Completion concern delivery, not job drain.
+end note
+
+note bottom of Contracts
+  Shared beyond ETL: factory, queue runtime,
+  workflow/session, graph membership and DTOs.
+  Proposed future name: TplQueue.Sample.Contracts.
+  No rename has been applied.
+end note
+
+note bottom of Browser
+  Initial snapshot, then observer-driven updates.
+  No custom application hub, REST API or polling.
+  Browsers do not start or own workloads.
+end note
+
+legend bottom
+  Solid arrows: direct .csproj references.
+  Dotted arrows: runtime calls/data or asset integration.
+  TplQueue package versions use TplQueuePackageVersion
+  (Directory.Build.props; current default 0.2.0-preview.2).
+  Transitive package references and private product internals
+  are intentionally outside this diagram.
+endlegend
+@enduml
