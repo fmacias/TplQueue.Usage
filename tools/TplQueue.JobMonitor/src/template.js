@@ -11,23 +11,28 @@
     <label>Window end (UTC) <input class="reference-input" type="datetime-local" step="0.001" aria-label="Window end datetime UTC"></label>
   </div>
   <div class="results" aria-label="Matching jobs"></div>
-  <div class="viewport-row">
+  <nav class="queue-summary" aria-label="Observed jobs in each queue"></nav>
+  <div class="workspace">
+   <div class="viewport-row">
     <div class="viewport" tabindex="0" aria-label="Queue timeline. Scroll horizontally for queues; use arrow or page keys for history.">
       <svg class="timeline" role="group" aria-label="Jobs and dependencies"></svg>
     </div>
     <svg class="time-ruler" role="img" aria-label="UTC time ruler"></svg>
+    <div class="history" tabindex="0" role="region" aria-label="Scroll execution history vertically"><div></div></div>
+   </div>
     <section class="inspection" aria-label="Jobs in the selected interval" hidden>
       <div class="inspection-toolbar"><h2 class="inspection-heading" tabindex="-1"></h2>
         <button type="button" data-action="close-inspection" aria-label="Close interval job list">×</button></div>
       <p class="inspection-note"></p>
+      <button type="button" data-action="refresh-inspection" hidden>Updates available · Refresh inspection</button>
+      <div class="inspection-relations" aria-label="Selected job dependencies"></div>
       <div class="inspection-jobs"></div>
       <button type="button" data-action="overview">Back to 5 seconds</button>
     </section>
-    <div class="history" tabindex="0" role="region" aria-label="Scroll execution history vertically"><div></div></div>
   </div>
   <footer><span class="mode" role="status"></span><span class="legend">W Waiting · ▶ Running · ✓ Completed · ↻ Retried · × Failed · − Cancelled</span>
     <span>Square center = exact time · Number = grouped jobs · U = Unassigned</span>
-    <span>Solid line = dependency · Dashed arrow = same job, enqueue → start</span></footer>
+    <span>R = Root · Solid arrow = prerequisite → dependent · ×N = relationships · Dashed arrow = same job, enqueue → start</span></footer>
   <div class="accessible-info" role="status"></div>
 </div>`;
 

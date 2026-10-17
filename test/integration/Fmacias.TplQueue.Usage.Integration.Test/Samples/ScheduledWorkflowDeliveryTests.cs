@@ -196,5 +196,7 @@ public sealed class ScheduledWorkflowDeliveryTests
         public IDisposable Subscribe(IObserver<IJobEvent> observer) => throw new NotSupportedException();
         public void Enqueue<T>(AvailableQueue queue, IDataJobRoot<T> root, CancellationToken cancellationToken)
             where T : IPayload => throw new NotSupportedException();
+        public void EnqueueFifo<T>(AvailableQueue queue, IDataJobRoot<T> root, CancellationToken cancellationToken)
+            where T : IPayload => throw new NotSupportedException();
     }
 }

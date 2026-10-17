@@ -64,6 +64,13 @@ They do not resolve another set of transient wrappers. Queue option names remain
 `FifoQ`, `ParallelQ` and `CacheQ`. Payloads are internal implementations with public
 constructors for System.Text.Json hydration and an explicit type allowlist.
 
+The runtime exposes both `Enqueue` and `EnqueueFifo`. The latter delegates to
+`IParallelQ.EnqueueFifo` or the generic `ICacheQ.EnqueueFifo` for those queues;
+the inherently serial `IFifoQ` uses its existing `Enqueue` operation. Both paths
+capture composed graph membership before dispatch and share linked cancellation
+registration and terminal/failure cleanup. UC03 explicitly calls `EnqueueFifo`
+on FIFO, ParallelQ and CacheQ; ETL and SingleJob continue using `Enqueue`.
+
 Factory overloads copy caller-supplied measurements into immutable payloads. The
 Simulation-owned `SampleMeasurementSource` supplies the workflow batches. Domain is sample code,
 not a product package or a new documentation publishing source. Adapter's language
@@ -78,7 +85,8 @@ updates; there is no application REST API, OpenAPI document or custom dashboard 
 ETL, SingleJob and MultipleFifoRoots implement `ISimulationWorkflow` through
 `ScheduledWorkflow`. Each workflow owns one `System.Threading.Timer`. ETL and
 SingleJob attempt a submission to each of the three queues per tick. UC03 adds
-one FIFO-only timer, so the host starts three continuous workflow timers. Each
+one timer that requests FIFO submission on all three queues, so the host starts
+three continuous workflow timers. Each
 Submit call requests fresh Domain jobs; no workflow replays cached job instances.
 `ISimulationService` coordinates Start, StopAsync, Completion and detached snapshots.
 Neither workflow nor session contract implements IDisposable; the host awaits
@@ -120,9 +128,9 @@ tick; this guards callback overlap, not queue execution capacity. Submission fai
 are recorded without preventing attempts on remaining queues or later ticks.
 Snapshots aggregate accepted root IDs and counters; SkippedTicks counts callback
 overlap and FailedTicks counts affected ticks. No catch-up scheduler is added.
-UC03 continuously submits a fresh FIFO root every 100 ms, sharing FIFO capacity
-with ETL and SingleJob. Timer interleaving determines enqueue order across workflows;
-UC03 roots retain their relative submission order. FIFO's serial execution can leave
+UC03 continuously submits a fresh root to each queue through `EnqueueFifo` every
+100 ms, sharing the queues with ETL and SingleJob. Timer interleaving determines
+enqueue order across workflows; UC03 ordering is queue-local. FIFO's serial execution can leave
 many roots waiting, all represented through actual queue observations.
 
 **Stop arrivals** calls the singleton session's StopAsync, closes admission and
@@ -163,15 +171,19 @@ The dashboard's arrivals state follows session Completion after Stop or shutdown
 
 The standard host always includes `MultipleFifoRootsWorkflow`
 (`multiple-fifo-roots` in delivery snapshots) alongside ETL and SingleJob.
-Every arrival requests a fresh independent ingest root from the existing Domain
-factory through `ISampleJobFactory`. Arrivals begin after one second and continue
+Every arrival requests a fresh independent ingest root per queue from the existing
+Domain factory through `ISampleJobFactory`. Each root has its own job ID; instances
+are not shared between queues. Arrivals begin after one second and continue
 at 100 ms intervals without a root-count limit or active-root cap. The existing
-500 ms ingest handler lets queued work accumulate. UC03 submits only to FIFO;
+500 ms ingest handler lets queued work accumulate. UC03 uses `EnqueueFifo` on FIFO,
+ParallelQ and CacheQ on every tick;
 ETL and SingleJob continuously submit to FIFO, Parallel and Cache at their existing intervals.
 
 Successful submissions are recorded in order in the delivery snapshot. Accepted
-roots retain their host token and execute through the public serial FIFO contract
-on channel zero. A failed submission is recorded; a later tick tries a fresh root.
+roots retain their host token and use each queue's public FIFO submission contract.
+FIFO runs on channel zero; ParallelQ and CacheQ retain their actual observed channels.
+There is no global ordering across queues. A failed submission is recorded without
+preventing attempts on the other queues or fresh roots on later ticks.
 Stop arrivals closes all workflow timers without cancelling accepted work. Keep
 the host running to observe the accumulated backlog drain after stopping arrivals.
 
@@ -182,9 +194,10 @@ no queue scheduling or event data is synthesized by the scenario. Observer deliv
 order does not establish handler order, and queue `WaitAsync` does not drain observers.
 Host ownership, timer cleanup, runtime identity and browser lifecycle are unchanged.
 
-The focused integration test holds handlers while more than six roots are accepted,
-explicitly stops arrivals, then checks handler start/finish order separately from
-observer completion, channel zero and composed membership. A combined integration
+The focused integration test holds handlers while at least eight roots per queue
+are accepted, explicitly stops arrivals, then checks handler start/finish order per
+queue separately from observer completion, execution channels and composed membership.
+CacheQ uses the gated registered handler after hydration. A combined integration
 case includes all three workflows and verifies they continue until explicit stop.
 Runtime and browser
 acceptance remain human-run; see the [sample launch guide](../../samples/TplQueue.Sample.BlazorSignalR/README.md).
@@ -231,9 +244,9 @@ Producers without a catalog retain the existing success-based fallback; their
 early membership remains unknown. JavaScript accepts older singular-only producers
 and emits both fields in `job-select`. The Blazor callback still selects by job ID.
 
-Selection follows explicit dependency edges in both directions for all outcomes.
-Selecting a shared prerequisite or either connected root highlights the whole
-connected graph. FIFO ordering edges remain visible but do not merge composed run
+Selection highlights composed memberships and their immediate prerequisites and
+dependents for all outcomes. Explicit navigation follows longer chains without
+highlighting the entire FIFO history. FIFO ordering edges remain visible but do not merge composed run
 memberships. Root lists never choose execution channels or synthesize edges.
 Shared membership support does not mean a runnable shared/cross-queue workflow
 already exists. The current factory supplies only independent ingest roots and
@@ -304,6 +317,10 @@ existing error summary remains available to C# consumers.
 Assigned node time uses ChannelStartedAt, captured only from a channel-bearing
 Started event. Running, retry and terminal observations do not substitute their
 timestamps for channel acquisition. A late Started event enriches the position
+only for the captured channel once a job is terminal. Later observations of that
+terminal identity on another channel do not relocate its completed execution.
+Active jobs may still change channel and require a matching Started timestamp.
+Late start enrichment continues
 without regressing lifecycle state. Until that event is known, the node stays
 Unassigned at EnqueuedAt (or FirstObservedAt when enqueue is unknown). On assignment
 the same job gains its channel/start position and retains its enqueue marker in U.
@@ -316,8 +333,8 @@ such. Root identity never places jobs into channels. Explicit dependencies creat
 job-to-job edges; enqueue-to-start connectors describe positions of the same job.
 No scheduler or observer contract change is required.
 
-The monitor provides dark theme tokens, search by name/ID/description, connected
-graph focus, selection, bounded hover metadata, zoom, draggable/keyboard queue
+The monitor provides dark theme tokens, search by name/ID/description, composed-run
+and immediate-dependency focus, selection, bounded hover metadata, zoom, draggable/keyboard queue
 dividers, horizontal overflow and vertical history navigation. No permanent
 details panel reserves viewer space. State normalization belongs to the model;
 unknown states remain visible.
@@ -334,9 +351,30 @@ Square position markers grow from 2 to 12 pixels during closer inspection, with
 readable outlines and state symbols. Channel pitch defaults to 40 pixels and does
 not grow with time zoom. Same-channel collisions produce count markers spanning
 the actual grouped interval; individual timestamps are never displaced. Selecting
-a count opens a shorter interval and a temporary list for individual selection,
-including identical timestamps. Back to 5 seconds restores the overview. Straight
-connectors join visible markers; internal group edges appear when jobs separate.
+a count opens a shorter interval and a temporary docked inspector for individual
+selection. The time axis expands enough to separate distinct same-lane timestamps;
+large groups scroll vertically with an aligned UTC ruler. Selecting a member or
+resizing retains the full group's interval. Identical timestamps remain count
+squares with edges and individually selectable list entries. Counts are centered
+without a small dependency label; internal dependencies remain in tooltips and
+inspection. Group squares are white until every member completes, then green,
+using current job state even for retained enqueue positions.
+Before advancing live time would scroll any visible group member out of the
+interval, the controller holds the current reference. Snapshots continue updating
+state, so a completed group remains a green numbered square in the same timeline.
+Follow live explicitly catches up to the latest five seconds. Clicking a group or
+zooming resolves its members; further group zoom adds vertical space without
+cropping siblings. Explicit snapshot removal of jobs still applies.
+Queue summary buttons retain access to all observed jobs when they leave the live
+interval, including CacheQ history. Root groups list actual composed
+memberships, independently of time-based collision groups. Inspection holds one
+captured snapshot; subsequent snapshots replace a pending latest snapshot until
+Refresh inspection, close, Back to 5 seconds or Follow live. Selection retains job
+identity across refreshes. Back to 5 seconds restores the overview. Straight arrows
+point from prerequisite to dependent, including root-to-root ordering. Relationships
+between the same visible groups share a counted connector; internal dependencies
+are counted on groups and individually navigable in inspection. U displays current
+waiting count separately from retained enqueue history in its tooltip.
 See the component README for geometry, configuration and pixel-resolution limits.
 
 ## Rendering and lifecycle

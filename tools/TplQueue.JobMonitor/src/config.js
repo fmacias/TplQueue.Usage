@@ -9,7 +9,7 @@ export function options(input = {}) {
   for (const key of Object.keys(defaults))
     if (!Number.isFinite(value[key]) || value[key] < (key === 'liveLagMs' ? -60000 : 0))
       throw new TypeError(`Invalid option: ${key}`);
-  value.windowMs = Math.max(1, Math.min(5000, value.windowMs));
+  value.windowMs = Math.max(1, value.windowMs);
   value.scale = Math.max(1, Math.min(value.windowMs, value.scale));
   value.minMarkerSize = Math.max(2, value.minMarkerSize);
   value.maxMarkerSize = Math.max(value.minMarkerSize, value.maxMarkerSize);

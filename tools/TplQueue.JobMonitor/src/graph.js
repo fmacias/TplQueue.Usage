@@ -19,3 +19,19 @@ export function connected(model, jobId) {
   }
   return found;
 }
+
+/** Composed run memberships plus one dependency hop; FIFO history must not swallow focus. */
+export function neighborhood(model, jobId) {
+  const selected = model.jobs.find(j => j.id === jobId);
+  if (!selected) return new Set();
+  const roots = new Set(selected.rootJobIds);
+  if (selected.isRoot) roots.add(selected.id);
+  const members = new Set(model.jobs.filter(j => j.id === jobId || roots.has(j.id) ||
+    j.rootJobIds.some(root => roots.has(root))).map(j => j.id));
+  const result = new Set(members);
+  for (const job of model.jobs) for (const prerequisite of job.dependsOn) {
+    if (members.has(job.id)) result.add(prerequisite);
+    if (members.has(prerequisite)) result.add(job.id);
+  }
+  return result;
+}

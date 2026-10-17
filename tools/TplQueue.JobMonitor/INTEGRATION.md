@@ -105,8 +105,10 @@ Preserve the sequence in `Apply`:
 1. Validate channel range against the queue before mutating state.
 2. Deduplicate event fingerprints, including channel metadata, under the store lock.
 3. Accept non-null channel metadata at least as recent as the stored channel
-   observation. Late null-channel events cannot erase captured identity.
-4. If the accepted channel changes, clear the old ChannelStartedAt.
+   observation until a terminal job has a captured channel. Later observations
+   cannot relocate that terminal identity to another channel. Late null-channel
+   events cannot erase captured identity.
+4. If an active job's accepted channel changes, clear the old ChannelStartedAt.
 5. A channel-bearing Started event matching the stored channel enriches
    ChannelStartedAt, even when delivered after Running or terminal events.
 6. Preserve lifecycle precedence: delayed Started corrects placement without
@@ -212,6 +214,28 @@ presentation values through safe DOM textContent.
 ## 5. Viewer behavior the host must preserve
 
 The frontend instructions give detailed geometry. Integration must retain:
+
+Inspection now docks beside/below the timeline and captures one snapshot while
+the bridge continues delivering updates. The component retains only the latest
+pending snapshot and exposes Refresh inspection; Follow live, close or overview
+also applies it. The host must continue calling `setData` normally. No DTO or
+Blazor callback changes are required. Group summaries distinguish current state
+from enqueue history; root groups use supplied memberships, while arrows use only
+actual dependencies. Selecting a group expands the time axis to separate distinct
+timestamps, with vertical scrolling when the full group needs more height. Selecting
+a member retains that interval and scrolls to its position. Equal-time collisions
+stay in count squares with edges. Group counts are centered without the small
+dependency label and turn green only when all members complete. The current view
+holds before live advancement would scroll a visible group away; state continues
+updating. Follow live explicitly catches up again. Click or zoom resolves grouped
+members on the same timeline. Queue summary buttons also open recorded history;
+no host filtering or retention change is needed.
+Bundled arrows count explicit relationships, including root-to-root ordering;
+internal group dependencies remain accessible through inspector navigation.
+
+The existing `SynchronizeJobMonitorAssets` target includes the new inspection
+modules through its source glob. Run the normal build/synchronization workflow
+and reload the browser to replace loaded ES modules; never edit generated copies.
 
 - A five-second overview ending at the bottom reference, fixed left UTC ruler,
   exact square centers and time-only zoom down to a one-millisecond interval.
@@ -330,7 +354,7 @@ From tools/TplQueue.JobMonitor:
 
 ```powershell
 node scripts/check.mjs
-node --test tests/layout.test.js
+node --test tests/layout.test.js tests/inspection.test.js
 node demo/server.mjs
 ```
 
@@ -384,7 +408,7 @@ not run. Collected coverage is not a claim that the baseline gate passed.
 | --- | --- |
 | Completed job remains in U | Was a matching channel-bearing Started event delivered? Terminal metadata alone is insufficient. |
 | Two jobs share a count marker | Check start times and pixel resolution. Sequential starts can share a parsed millisecond; inspect the list. |
-| U has a count but no visible jobs | Total count covers the snapshot; tooltip gives the interval count. Search navigates to older jobs. |
+| U has a waiting count but no visible jobs | W counts current waiting jobs across the snapshot; the tooltip separately reports enqueue history and visible positions. Search navigates to older jobs. |
 | Source changes missing in Blazor | Rebuild to synchronize generated assets; do not patch the generated copy. |
 | Live mode stops on every update | Remove optional referenceTime from live snapshots. The C# DTO omits it. |
 | Empty or wrongly sized viewport | Check explicit height, module/CSS loading and viewport ResizeObserver behavior. |

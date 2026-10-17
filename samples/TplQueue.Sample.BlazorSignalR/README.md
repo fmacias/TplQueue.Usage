@@ -10,7 +10,7 @@ three seconds. Each full pair of ticks adds six roots and twelve jobs. There are
 no sample active-root caps: each arrival creates fresh jobs even while earlier
 roots wait. Overlapping submission callbacks are still skipped. The former
 Simulation:Profile and timing configuration keys are not used by this host.
-UC03 adds a third continuous FIFO timer as described below. New workflows
+UC03 adds a third timer that submits with FIFO ordering to all three queues. New workflows
 are always included alongside existing workflows without configuration selectors.
 
 The host attaches observers before starting delivery. **Stop arrivals** closes
@@ -60,14 +60,17 @@ dotnet run --no-build --project .\samples\TplQueue.Sample.BlazorSignalR
 ```
 
 **UC03: multiple FIFO roots** runs automatically alongside ETL and SingleJob.
-It continuously submits fresh independent Domain ingest roots to the existing FIFO
-instance after a one-second startup offset, with 100 ms between arrival attempts.
+It continuously submits fresh independent Domain ingest roots through
+`IEtlQueueRuntime.EnqueueFifo` to FIFO, ParallelQ and CacheQ after a one-second
+startup offset, with 100 ms between arrival attempts. Each tick creates one root
+with its own ID for each queue.
 The existing ingest handler takes 500 ms. There is no total root limit or active-root
-admission cap, so FIFO accumulates observable waiting work and executes on channel zero.
+admission cap, so waiting work accumulates. FIFO executes on channel zero;
+ParallelQ and CacheQ show their actual backend execution channels.
 Failed submissions are recorded; later ticks create fresh roots. **Stop arrivals**
 ends delivery without cancelling accepted jobs; keep the host running to let them finish.
-ETL and SingleJob continue submitting to all three queues. Their FIFO submissions
-can interleave with UC03, whose roots keep their relative submission order.
+ETL and SingleJob continue using normal enqueue on all three queues. Their submissions
+can interleave with UC03; FIFO ordering is local to each queue, not global across queues.
 The dashboard keeps reporting arrivals active until **Stop arrivals** stops the
 whole session. Backlog and drain time grow with the duration of this workload.
 

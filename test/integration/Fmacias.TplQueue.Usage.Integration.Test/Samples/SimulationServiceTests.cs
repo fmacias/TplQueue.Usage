@@ -118,6 +118,9 @@ public sealed class SimulationServiceTests
             throw new NotImplementedException();
         }
 
+        public void EnqueueFifo<TPayload>(AvailableQueue availableQueue, IDataJobRoot<TPayload> root, CancellationToken cancellationToken)
+            where TPayload : IPayload => throw new NotSupportedException();
+
         public bool IsActive(Guid rootJobId)
         {
             throw new NotImplementedException();

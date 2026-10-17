@@ -1,7 +1,7 @@
 # TplQueue Job Monitor — Adopted frontend design and maintenance instructions
 
-This document records the implemented design as of September 22, 2026, including
-the decisions reached after the original sketch. The baseline is Usage commits
+This document records the implemented design, including the October 2026 grouped
+inspection changes and decisions reached after the original sketch. The original baseline is Usage commits
 `ac680c2` and `931d6f0`. Earlier alternatives below are history, not instructions
 to implement them again.
 
@@ -17,8 +17,8 @@ historical evidence, not the current specification or current test results.
 The monitor is a passive queue execution timeline for an industrial diagnostic
 viewer. Save space while keeping positions, states and interactions readable,
 including for people with reduced vision. The available area belongs to the
-viewer; there is no permanent job details panel. A temporary inspection list is
-allowed when the user opens a group of dense events.
+viewer; there is no permanent job details panel. Selecting a job or group opens a
+temporary inspector docked beside the timeline, or below it in narrow containers.
 
 ![Original UX sketch](Sketchbyhand.jpg)
 
@@ -47,6 +47,7 @@ Do not introduce a second renderer or move queue behavior into JavaScript.
 | --- | --- |
 | [src/model.js](src/model.js) | Validate/detach snapshots; normalize state and bound text/metadata. |
 | [src/graph.js](src/graph.js) | Search and traverse explicit dependency relationships. |
+| [src/inspection.js](src/inspection.js), [src/inspection-view.js](src/inspection-view.js) | Adaptive selection resolution, current identity/state summaries and captured inspection UI. |
 | [src/config.js](src/config.js) | Defaults and minimum geometry constraints. |
 | [src/layout.js](src/layout.js) | Coordinates, ticks, groups, queue widths and edge paths. |
 | [src/job-queue-timeline.js](src/job-queue-timeline.js) | Time, selection, input, expansion, redraw scheduling and lifecycle. |
@@ -99,7 +100,8 @@ y = referenceY + (jobTime - referenceTime) * pixelsPerMs
 Defaults are `windowMs = 5000`, `scale = 1`, `plotTop = 74`, and
 `referenceY = layoutHeight - 20`. Plot top includes the 56-pixel header and
 clearance for count markers. Layout height has a 240-pixel minimum. Jobs outside
-the interval stay in the model but have no visible markers.
+the interval stay in the model. Live advancement holds before it would scroll a
+visible group out of this interval; Follow live explicitly catches up again.
 
 The square center is the job's exact position on its time axis and channel.
 Keep fractional coordinates; never round timestamps to grid lines or offset jobs
@@ -153,8 +155,13 @@ null lane when expanded. Sort by time and job ID. Consecutive centers closer tha
 `clusterSize + markerGap` (36 pixels at defaults) join one group; adjacency can
 join a run of several jobs.
 
-Replace individual markers with a count halfway between the first and last times
-and a bracket over that real range. This summary position is not a new event time.
+Replace individual markers with a count square halfway between the first and last
+times, plus its actual dependency edges. Do not draw a vertical range bracket.
+Center the job count without a small dependency label underneath. Use white for
+the group until every member's current state is completed, then green. Terminal
+failure/cancellation is not completion. Keep dependency counts in the tooltip
+and inspector. Retained enqueue groups use current job states for their color.
+The tooltip and inspector retain the exact range. This summary position is not a new event time.
 Never displace individual timestamps. The count means several jobs at the available
 display resolution; it does not claim simultaneous channel ownership.
 
@@ -164,11 +171,42 @@ a millisecond, and distinct milliseconds can map to less than a screen pixel.
 Keep the several-jobs representation for these cases.
 
 Click or Enter/Space on a count opens a shorter interval in the same viewer and a
-temporary scrollable job list. The interval uses 1.6 times the group's time span,
-limited by the current interval and a one-millisecond minimum. Equal timestamps
+temporary scrollable job list. The interval fits the complete group's time span
+with 10% padding and a one-millisecond minimum. Resolve distinct timestamps using
+the minimum positive same-lane gap; expand the plot vertically when the viewport
+cannot fit all markers. Scroll this time axis and its aligned ruler together,
+preserving channel widths and true time differences. Equal timestamps
 still require the list; zoom cannot separate equal time coordinates.
 
-List entries permit individual selection. Closing only the list keeps the zoom.
+List entries show individual IDs, root memberships and current states. Selecting
+a member keeps the entire inspected group's interval. Do not zoom around just that
+member and crop its siblings. Selecting a member scrolls to its position. Resizing
+preserves the interval and the space needed to separate distinct timestamps.
+Queue/root inspection still fits its entire interval with count squares where
+necessary. Direct single-job selection outside
+a group still adapts resolution to nearby same-lane timestamps. Equal parsed
+millisecond timestamps stay grouped. Their actual dependency relationships remain
+individually navigable in the inspector without shifting timestamp centers.
+Inspect root group lists supplied composed memberships across lanes and queues;
+temporal collision grouping does not invent a business batch or workflow membership.
+Summaries count unique jobs, root memberships, current states and internal dependencies.
+Retained enqueue positions use the job's current state in summaries.
+
+Queue summary buttons remain visible when events age out of the live window.
+Hold the reference before automatic live advancement would scroll any visible
+group member outside the interval. Continue accepting state updates while held,
+keeping completed groups as green numbered squares on the timeline. Follow live
+explicitly catches up again. Replacement snapshots remain authoritative:
+explicitly removed jobs leave the timeline as well.
+They report total jobs, active jobs and jobs outside the current interval. Clicking
+a queue fits its complete recorded history, including Unassigned jobs; its time
+interval can exceed five seconds. Temporal groups split or combine at the resulting
+resolution while every inspected member retains a visible representation.
+
+Inspection captures one immutable normalized snapshot. The bridge continues sending
+data; the controller stores the latest pending snapshot and displays Updates available.
+Refresh inspection applies it while preserving the selected ID if present. Closing
+the list applies pending data and keeps the zoom.
 Back to 5 seconds or Escape restores the saved overview reference and live/history
 mode. Restored live mode catches up to the current clock.
 
@@ -179,11 +217,12 @@ It never counts toward MaxParallelism and never maps null to channel 0.
 
 - The label stays **U** in both states. Native SVG hover text and the accessible
   name contain **Unassigned**.
-- It starts collapsed with `›` and total count. Expanded, it shows `‹`, count,
+- It starts collapsed with `›` and current waiting count marked W. Expanded, it shows `‹`, count,
   a vertical guide and the unassigned markers in the visible time window.
 - Click, Enter or Space toggles it. `aria-expanded` and keyboard focus survive redraws.
-- The count covers all unassigned positions, including retained enqueue history. The tooltip also gives the
-  visible-interval count; a nonzero total can coexist with no visible jobs.
+- The tooltip separately reports waiting now, retained enqueue history, total
+  unassigned positions and the visible-interval count. Completed history never
+  contributes to the waiting count; a nonzero total can coexist with no visible jobs.
 - Search/focus expands the selected job's strip and navigates to its time.
 - Expansion survives snapshots. Strips disappear only when no unassigned jobs or enqueue history remain; expansion memory is
   removed when the queue itself leaves the snapshot.
@@ -198,29 +237,36 @@ Live following updates on each accepted `setData(snapshot)` using
 `Date.now() - liveLagMs` (default lag zero); older jobs move upward only when new
 data arrives. There is no recurring timer or idle redraw. Explicit Follow live
 and restoration of live overview catch up once to the clock. Pause freezes the
-reference while snapshots still update job state. The renderer never reads the clock.
+reference while snapshots still update job state, except while inspection holds a
+captured snapshot. The renderer never reads the clock.
 
 History supports a native vertical scrollbar, wheel, UTC reference input, and
 viewport ArrowUp/ArrowDown or PageUp/PageDown. Arrow keys move by a tenth of the
 visible interval; page keys by one interval. History navigation pauses live mode
 without changing the interval duration or channel assignments.
 
-The +/- controls double/halve time magnification around the visible midpoint and
-save the previous overview. Configuration clamps `windowMs` to 1..5000 and `scale`
+With visible groups, zoom-in resolves the visible jobs in a complete inspection
+interval. Further group zoom expands/contracts vertical spacing while retaining
+all members. Otherwise the +/- controls double/halve time magnification around
+the visible midpoint and save the previous overview. Configuration permits `windowMs` of at least 1 and clamps `scale`
 to 1..windowMs, giving a minimum one-millisecond interval. `followLive()` and
 `showOverview()` reset to 5000 ms and scale 1. Old `pixelsPerSecond`, `rowGap` and
 `minNodeRadius` options no longer control layout.
 
-Search matches name, ID and description. Selection traverses explicit dependencies
-in both directions, emphasizes the connected graph, and centers the selected job
-in the current interval. It does not widen the interval to fit the entire graph.
+Search matches name, ID and description. Selection emphasizes composed memberships
+plus one hop of actual prerequisites and dependents, and centers the selected job
+at an adaptive resolution. Further dependency navigation is explicit so a FIFO
+chain does not highlight the entire execution history.
 `job-select` emits jobId, rootJobId and all rootJobIds without opening a permanent
 panel. Shared prerequisites keep one job identity and all memberships across
 running, failed and cancelled outcomes. Membership does not create edges or channels.
 
-Dependency connectors are straight segments trimmed to marker boundaries, including
-cross-queue edges. Grouped endpoints attach to count markers and mean membership;
-internal group edges stay hidden until endpoints separate. Hidden/out-of-window
+Dependency connectors are straight arrows from prerequisite to dependent, trimmed
+to visible outlines, including cross-queue and root-to-root edges. Root jobs carry
+an R badge. Relationships between the same visible representatives share one
+connector with a ×N count. Internal dependencies are counted in the group's tooltip
+and are navigable by individual ID in inspection. Group summaries never synthesize
+relationships from proximity or root membership. Hidden/out-of-window
 endpoints produce no visible segment. Missing dependency IDs remain unresolved and
 are counted in status text. Crossing-free routing and minimum line length achieved
 by shifting timestamps are not implemented promises.
@@ -250,7 +296,7 @@ With Node.js 20 or newer, from this directory:
 
 ```powershell
 node scripts/check.mjs
-node --test tests/layout.test.js
+node --test tests/layout.test.js tests/inspection.test.js
 node demo/server.mjs
 ```
 

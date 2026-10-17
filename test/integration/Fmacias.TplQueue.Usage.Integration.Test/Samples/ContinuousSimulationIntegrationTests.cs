@@ -52,7 +52,7 @@ public sealed class ContinuousSimulationIntegrationTests
             if (includeMultipleFifoRoots)
             {
                 while (simulation.GetSnapshot().Single(snapshot => snapshot.ScenarioId == "multiple-fifo-roots")
-                    .RootIds.Count < 8) await Task.Delay(10, timeout.Token);
+                    .RootIds.Count < 24) await Task.Delay(10, timeout.Token);
                 Assert.That(simulation.Completion.IsCompleted, Is.False,
                     "Every workflow must keep delivering until the session is explicitly stopped.");
                 Assert.That(workflows.All(workflow => !workflow.Completion.IsCompleted), Is.True);
@@ -76,7 +76,7 @@ public sealed class ContinuousSimulationIntegrationTests
         Assert.That(etlRoots, Is.GreaterThanOrEqualTo(3));
         Assert.That(singleRoots, Is.GreaterThanOrEqualTo(3));
         if (includeMultipleFifoRoots)
-            Assert.That(fifoRoots.Count, Is.GreaterThanOrEqualTo(8));
+            Assert.That(fifoRoots.Count, Is.GreaterThanOrEqualTo(24));
         else
         {
             Assert.That(etlRoots, Is.EqualTo(3));
@@ -91,9 +91,17 @@ public sealed class ContinuousSimulationIntegrationTests
         var completedByQueue = observer.Events.Where(e => e.Status == JobEventStatus.RootSuccessed)
             .GroupBy(e => e.JobInfo.CrossQueueId).ToArray();
         Assert.That(completedByQueue, Has.Length.EqualTo(3));
-        var fifoId = provider.GetRequiredService<IEtlQueueRuntime>().GetQueue(AvailableQueue.FIFO).QueueId;
-        Assert.That(observer.Events.Where(e => e.Status == JobEventStatus.RootSuccessed && fifoRoots.Contains(e.JobInfo.Id))
-            .Select(e => e.JobInfo.CrossQueueId), Is.All.EqualTo(fifoId));
+        if (includeMultipleFifoRoots)
+        {
+            var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
+            var uc03ByQueue = observer.Events
+                .Where(e => e.Status == JobEventStatus.RootSuccessed && fifoRoots.Contains(e.JobInfo.Id))
+                .GroupBy(e => e.JobInfo.CrossQueueId).ToArray();
+            Assert.That(uc03ByQueue.Select(group => group.Key), Is.EquivalentTo(
+                Enum.GetValues<AvailableQueue>().Select(queue => runtime.GetQueue(queue).QueueId)));
+            Assert.That(uc03ByQueue.Select(group => group.Select(e => e.JobInfo.Id).Distinct().Count()),
+                Is.All.GreaterThanOrEqualTo(8));
+        }
         if (!includeMultipleFifoRoots)
             Assert.That(completedByQueue.Select(queue => queue.Count()), Is.All.EqualTo(2));
         Assert.That(observer.Events.Where(e => e.Status == JobEventStatus.RootSuccessed)

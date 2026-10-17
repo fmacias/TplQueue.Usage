@@ -46,7 +46,7 @@ The [development index](docs/development/index.md) leads to implementation-orien
 use-case specifications derived from the current source.
 
 The Blazor sample uses the reusable `job-queue-timeline` Web Component with real runtime execution channels, vertical time, and a full-area viewer without a permanent details panel. See the maintained architecture guide for contracts and validation.
-The component's five-second overview uses exact square position markers, a left UTC ruler and compact channels. Dense jobs use count markers with temporary closer inspection in the same viewer.
+The component's five-second overview uses exact square position markers, a left UTC ruler and compact channels. Dense jobs use count squares, white until every member completes and then green. Clicking a square or zooming expands time enough to separate distinct timestamps, with vertical scrolling for large groups and a docked inspector for individual selection. The view holds before a visible group would scroll away; incoming snapshots still update its state. Follow live explicitly catches up again. Inspection holds a captured snapshot until Refresh or Follow live.
 The Simulation module runs ETL, independent single-job and UC03 FIFO scenarios
 together. ETL and SingleJob start after one second and repeat every three seconds. **Stop
 arrivals** closes admission across all browser tabs while accepted jobs finish.
@@ -57,8 +57,10 @@ measurements, session lifecycle, execution and graph tracking. Domain owns job
 factories, payloads, handlers and queue/cache wrappers under `samples/TplQueue.Sample.Domain`.
 See [workflow structure](docs/architecture/blazor-consumer-sample.md#workflow-structure).
 The host always registers every implemented workflow together, without a selector.
-UC03 continuously creates independent Domain ingest roots on the existing FIFO,
-starting after one second at 100 ms intervals. The existing 500 ms handler makes
+UC03 continuously creates a fresh independent Domain ingest root for each of FIFO,
+ParallelQ and CacheQ through `IEtlQueueRuntime.EnqueueFifo`,
+starting after one second at 100 ms intervals. Each queue receives its own job ID.
+The existing 500 ms handler makes
 waiting work visible. All workflows enqueue fresh jobs until Stop arrivals or host
 cancellation, without sample active-root caps or lifetime root limits. FIFO retains
 serial execution; queued jobs remain observable while waiting. The backlog grows

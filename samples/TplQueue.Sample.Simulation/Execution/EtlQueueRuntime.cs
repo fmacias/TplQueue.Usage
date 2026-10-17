@@ -9,14 +9,13 @@ using TplQueue.Sample.Etl.Contracts;
 
 namespace TplQueue.Sample.Simulation.Runtime
 {
-    internal sealed class EtlQueueRuntime : IEtlQueueRuntime, IDisposable, IObserver<IJobEvent>
+    internal sealed class EtlQueueRuntime : IEtlQueueRuntime, IDisposable
     {
         private readonly ISampleFifoQ _sampleFifo;
         private readonly ISampleParallelQ _sampleParallel;
         private readonly ISampleCacheQ _sampleCacheQ;
         private readonly ILogger<EtlQueueRuntime> _logger;
         private readonly ISimulationGraphCatalog _graphs;
-        private readonly IReadOnlyList<IDisposable> _subscriptions;
         private readonly object _disposeSync = new object();
         private bool _disposed;
         private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _cancellations =
@@ -34,18 +33,28 @@ namespace TplQueue.Sample.Simulation.Runtime
             _sampleCacheQ = cacheQ ?? throw new ArgumentNullException(nameof(cacheQ));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
             _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
-            _subscriptions = new[]
-            {
-                _sampleFifo.InnerFifoQ.Subscribe(this),
-                _sampleParallel.InnerParallelQ.Subscribe(this),
-                _sampleCacheQ.InnerCacheQ.Subscribe(this)
-            };
         }
 
+        /// <summary>Submits a root through the selected queue's normal enqueue operation.</summary>
         public void Enqueue<TPayload>(
             AvailableQueue availableQueue,
             IDataJobRoot<TPayload> root,
             CancellationToken cancellationToken)
+            where TPayload : IPayload => EnqueueCore(availableQueue, root, cancellationToken, fifo: false);
+
+        /// <summary>Requests FIFO submission while preserving graph identity and cancellation ownership.</summary>
+        /// <remarks>FifoQ is already serial; ParallelQ and CacheQ use their explicit EnqueueFifo operation.</remarks>
+        public void EnqueueFifo<TPayload>(
+            AvailableQueue availableQueue,
+            IDataJobRoot<TPayload> root,
+            CancellationToken cancellationToken)
+            where TPayload : IPayload => EnqueueCore(availableQueue, root, cancellationToken, fifo: true);
+
+        private void EnqueueCore<TPayload>(
+            AvailableQueue availableQueue,
+            IDataJobRoot<TPayload> root,
+            CancellationToken cancellationToken,
+            bool fifo)
             where TPayload : IPayload
         {
             ThrowIfDisposed();
@@ -65,10 +74,12 @@ namespace TplQueue.Sample.Simulation.Runtime
                         _sampleFifo.InnerFifoQ.Enqueue(root, cancellationSource.Token);
                         break;
                     case AvailableQueue.Parallel:
-                        _sampleParallel.InnerParallelQ.Enqueue(root, cancellationSource.Token);
+                        if (fifo) _sampleParallel.InnerParallelQ.EnqueueFifo(root, cancellationSource.Token);
+                        else _sampleParallel.InnerParallelQ.Enqueue(root, cancellationSource.Token);
                         break;
                     case AvailableQueue.Cache:
-                        _sampleCacheQ.InnerCacheQ.Enqueue(root, cancellationSource.Token);
+                        if (fifo) _sampleCacheQ.InnerCacheQ.EnqueueFifo(root, cancellationSource.Token);
+                        else _sampleCacheQ.InnerCacheQ.Enqueue(root, cancellationSource.Token);
                         break;
                     default:
                         throw new InvalidOperationException(
@@ -138,39 +149,10 @@ namespace TplQueue.Sample.Simulation.Runtime
                 if (_disposed) return;
                 _disposed = true;
 
-                foreach (var subscription in _subscriptions)
-                {
-                    subscription.Dispose();
-                }
-
                 DisposeRelatedCancellations();
                 _sampleFifo.Dispose();
                 _sampleCacheQ.Dispose();
                 _sampleParallel.Dispose();
-            }
-        }
-
-        public void OnCompleted()
-        {
-        }
-
-        public void OnError(Exception error)
-        {
-            _logger.LogError(error, "A TplQueue ETL queue observer terminated with an error.");
-        }
-
-        public void OnNext(IJobEvent value)
-        {
-            if (value?.JobInfo == null)
-            {
-                return;
-            }
-
-            if (value.Status == JobEventStatus.RootSuccessed ||
-                value.Status == JobEventStatus.Failed ||
-                value.Status == JobEventStatus.Canceled)
-            {
-                ReleaseCancellation(value.JobInfo.Id);
             }
         }
 

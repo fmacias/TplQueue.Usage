@@ -607,6 +607,55 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             Assert.That(store.GetSnapshot().Jobs, Is.Empty);
         }
 
+        [TestCase(JobEventStatus.Successed, "completed")]
+        [TestCase(JobEventStatus.Failed, "failed")]
+        [TestCase(JobEventStatus.Canceled, "cancelled")]
+        public void Monitor_TerminalPositionSurvivesLaterChannelObservations(JobEventStatus terminal, string expectedState)
+        {
+            // Arrange: a terminal job already has an observed execution position.
+            var store = CreateStore();
+            var info = Job(Guid.NewGuid(), "retained terminal position", ParallelQueueId);
+            var time = Utc(10, 15, 0);
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, time, 1));
+            store.Apply(new ChannelEvent(terminal, info, time.AddSeconds(1), 1));
+            var before = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single();
+
+            // Act: FIFO dependency traversal can observe that identity again on another channel.
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, time.AddSeconds(2), 2));
+            store.Apply(new ChannelEvent(JobEventStatus.Running, info, time.AddSeconds(3), 2));
+            store.Apply(new ChannelEvent(terminal, info, time.AddSeconds(4), 2));
+            var after = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single();
+
+            // Assert: terminal observations do not relocate the completed execution.
+            Assert.Multiple(() =>
+            {
+                Assert.That(after.Channel, Is.EqualTo(before.Channel));
+                Assert.That(after.ObservedAt, Is.EqualTo(before.ObservedAt));
+                Assert.That(after.State, Is.EqualTo(expectedState));
+            });
+        }
+
+        [Test]
+        public void Monitor_ActiveChannelChangeStillRequiresItsOwnStartedObservation()
+        {
+            // Arrange
+            var store = CreateStore();
+            var info = Job(Guid.NewGuid(), "active channel change", ParallelQueueId);
+            var time = Utc(10, 15, 0);
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, time, 1));
+
+            // Act
+            store.Apply(new ChannelEvent(JobEventStatus.Running, info, time.AddSeconds(2), 2));
+            var beforeStarted = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single();
+            store.Apply(new ChannelEvent(JobEventStatus.Started, info, time.AddSeconds(1), 2));
+            var afterStarted = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single();
+
+            // Assert
+            Assert.That(beforeStarted.Channel, Is.Null);
+            Assert.That(afterStarted.Channel, Is.EqualTo(2));
+            Assert.That(afterStarted.ObservedAt, Is.EqualTo(time.AddSeconds(1)));
+        }
+
         [Test]
         public void LegacyEvents_RemainUnassigned_AndTransportContainsOnlyPresentationValues()
         {

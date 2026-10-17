@@ -1,6 +1,7 @@
 ﻿import { options } from './config.js';
 
 import { positions } from './model.js';
+import { summarize } from './inspection.js';
 
 function timeTicks(start, end, pixelsPerMs, plotTop) {
   const desired = Math.max(1, 48 / pixelsPerMs);
@@ -29,11 +30,11 @@ function groupMarkers(nodes, config, start, end) {
     const flush = () => {
       if (!members.length) return;
       if (members.length === 1) { markers.push(members[0]); return; }
-      const first = members[0], last = members.at(-1);
+      const first = members[0], last = members.at(-1), summary = summarize(members);
       const cluster = { kind: 'cluster', id: JSON.stringify(members.map(n => n.markerId)),
         queueId: first.queueId, queueName: first.queueName, channel: first.channel,
         x: first.x, y: (first.y + last.y) / 2, startY: first.y, endY: last.y,
-        startTime: first.time, endTime: last.time, members,
+        startTime: first.time, endTime: last.time, members, summary, state: summary.state, internalDependencies: 0,
         size: config.clusterSize, label: String(members.length),
         description: `${members.length} jobs, ${first.queueName}, ${first.channel === null ? 'unassigned' : `channel ${first.channel}`}, ${first.observedAt} to ${last.observedAt}. Inspect this interval.` };
       markers.push(cluster); clusters.push(cluster);
@@ -60,6 +61,7 @@ export function layout(model, input = {}) {
   const channelWidth = Math.max(config.minChannelWidth, config.channelWidth);
   const markerSize = Math.min(config.maxMarkerSize, config.minMarkerSize * config.scale);
   const points = positions(model);
+  const currentChannels = new Map(model.jobs.map(j => [j.id, j.channel]));
   let x = config.gutter;
   const queues = model.queues.map(q => {
     const unassigned = points.filter(j => j.queueId === q.id && j.channel === null);
@@ -73,6 +75,8 @@ export function layout(model, input = {}) {
     const queue = { ...q, x, width, baseWidth, minimumWidth, slotWidth, hasUnassigned,
       unassignedExpanded, unassignedWidth, unassignedLeft: x + baseWidth,
       unassignedCount: unassigned.length,
+      waitingCount: model.jobs.filter(j => j.queueId === q.id && j.channel === null && j.state === 'waiting').length,
+      historyCount: unassigned.filter(j => currentChannels.get(j.id) !== null).length,
       unassignedVisibleCount: unassigned.filter(j => j.time >= startTime && j.time <= referenceTime).length,
       label: baseWidth < q.name.length * 8 + 16 ? q.name.slice(0, 1) : q.name,
       channels: Array.from({ length: q.maxParallelism }, (_, i) => ({ index: i,
@@ -98,22 +102,33 @@ export function layout(model, input = {}) {
   const representatives = new Map();
   for (const marker of markers)
     for (const member of marker.members ?? [marker]) representatives.set(member.markerId, marker);
-  const edges = [];
+  const edges = [], bundles = new Map();
   const connect = (source, target, kind) => {
     const from = representatives.get(source.markerId), to = representatives.get(target.markerId);
-    if (!from || !to || from === to) return;
+    if (!from || !to) return;
+    if (from === to) {
+      if (kind === 'dependency') from.internalDependencies++;
+      return;
+    }
+    const key = JSON.stringify([from.id, to.id, kind]);
+    const relationship = { from: source.id, to: target.id,
+      rootToRoot: kind === 'dependency' && source.isRoot && target.isRoot };
+    const existing = bundles.get(key);
+    if (existing) { existing.relationships.push(relationship); existing.count++; return; }
     const dx = to.x - from.x, dy = to.y - from.y;
     const length = Math.max(Math.abs(dx), Math.abs(dy));
     if (!length) return;
     // Assignment arrowheads must stop at the visible outline, not underneath it.
-    const fromSize = kind === 'assignment' ? from.targetSize ?? from.size : from.size;
-    const toSize = kind === 'assignment' ? to.targetSize ?? to.size : to.size;
+    const fromSize = from.targetSize ?? from.size;
+    const toSize = to.targetSize ?? to.size;
     const a = fromSize / 2 / length, b = toSize / 2 / length;
-    edges.push({ from: source.id, to: target.id, fromMarker: source.markerId, toMarker: target.markerId, kind,
+    const edge = { from: source.id, to: target.id, fromMarker: source.markerId, toMarker: target.markerId, kind,
+      count: 1, relationships: [relationship], labelX: (from.x + to.x) / 2, labelY: (from.y + to.y) / 2,
       description: kind === 'assignment'
         ? `Enqueue → Started: same job ${source.name} (ID: ${source.id})`
         : `Dependency: ${target.name} (ID: ${target.id}) depends on ${source.name} (ID: ${source.id})`,
-      path: `M ${from.x + dx * a} ${from.y + dy * a} L ${to.x - dx * b} ${to.y - dy * b}` });
+      path: `M ${from.x + dx * a} ${from.y + dy * a} L ${to.x - dx * b} ${to.y - dy * b}` };
+    edges.push(edge); bundles.set(key, edge);
   };
   let missingEdges = 0;
   for (const node of byId.values()) for (const id of node.dependsOn) {
@@ -123,6 +138,10 @@ export function layout(model, input = {}) {
   for (const node of nodes)
     if (node.phase === 'enqueue' && byId.get(node.id).channel !== null)
       connect(node, byId.get(node.id), 'assignment');
+  for (const cluster of clusters) cluster.description +=
+    ` ${cluster.summary.rootCount} root memberships; ${cluster.summary.stateText} now; ${cluster.internalDependencies} internal dependencies.`;
+  for (const edge of edges) if (edge.count > 1) edge.description =
+    `${edge.count} ${edge.kind === 'dependency' ? 'dependencies' : 'enqueue → start relationships'} between these groups. Inspect a group for individual job IDs.`;
   return { queues, nodes, markers, clusters, edges, missingEdges, width: x + 8, height,
     referenceY, referenceTime, plotTop, startTime, windowMs, markerSize,
     ticks: timeTicks(startTime, referenceTime, pixelsPerMs, plotTop),

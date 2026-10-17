@@ -6,6 +6,7 @@ namespace TplQueue.Sample.BlazorSignalR.Presentation.Etl;
 
 /// <summary>
 /// Builds an idempotent, thread-safe projection from the three queue event streams.
+/// Terminal jobs retain their captured channel while delayed matching start events can enrich their position.
 /// </summary>
 internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
 {
@@ -52,7 +53,11 @@ internal sealed class EtlExecutionProjectionStore : IEtlExecutionProjectionStore
 
             var job = GetOrCreateJob(jobEvent.JobInfo, descriptor, jobEvent.Timestamp);
             // A late pre-execution event must never erase captured execution identity.
-            if (channel.HasValue && (job.ChannelObservedAt == null || ToOffset(jobEvent.Timestamp) >= job.ChannelObservedAt))
+            // Later dependency traversal may observe a terminal identity on another channel;
+            // it must not relocate that job's completed execution in the monitor.
+            var terminalChannel = StatusRank(job.Status) == 3 && job.ExecutionChannel.HasValue;
+            if (!terminalChannel && channel.HasValue &&
+                (job.ChannelObservedAt == null || ToOffset(jobEvent.Timestamp) >= job.ChannelObservedAt))
             {
                 if (job.ExecutionChannel != channel) job.ChannelStartedAt = null;
                 job.ExecutionChannel = channel;

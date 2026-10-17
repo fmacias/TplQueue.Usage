@@ -23,8 +23,8 @@ waits for admitted submissions, not job drain, and does not cancel accepted work
 Completion means arrivals/submissions have stopped. Start is single-use.
 Continuous delivery exists now; retained history and business data are unbounded.
 Finite profiles and configurable timing from earlier milestones remain unavailable.
-UC03 always runs alongside ETL and SingleJob with continuous fresh FIFO roots at
-100 ms intervals. Every workflow runs until Stop or host cancellation, with no
+UC03 always runs alongside ETL and SingleJob with a fresh root per queue submitted
+through `EnqueueFifo` to FIFO, ParallelQ and CacheQ every 100 ms. Every workflow runs until Stop or host cancellation, with no
 lifetime root limit. Queued jobs remain observable while execution capacity is busy.
 
 ## Extension boundaries
@@ -78,7 +78,7 @@ for an established dependency limitation recorded in the README.
 | --- | --- | --- |
 | [UC01 — Single job on each queue](simulation-tasks/uc01-single-job-on-each-queue.md) | Implemented | Independent ingest roots on all queues. |
 | [UC02 — Sequential ETL chain](simulation-tasks/uc02-sequential-etl-chain.md) | Implemented | Named ETL workflow and three-job dependency chain. |
-| [UC03 — Multiple FIFO roots](simulation-tasks/uc03-multiple-fifo-roots.md) | Implemented; validation pending | Continuous fresh FIFO roots alongside ETL/SingleJob; observable backlog drains after Stop. |
+| [UC03 — Multiple FIFO roots](simulation-tasks/uc03-multiple-fifo-roots.md) | Implemented; validation pending | Continuous `EnqueueFifo` submissions on FIFO, ParallelQ and CacheQ alongside ETL/SingleJob; backlog drains after Stop. |
 | [UC04 — Multiple parallel roots](simulation-tasks/uc04-multiple-parallel-roots.md) | Pending | Add deliberate parallel saturation and channel reuse. |
 | [UC05 — Cache-backed ETL](simulation-tasks/uc05-cache-backed-etl.md) | Partially implemented | Cache ETL exists; acknowledgment and outcome variants remain. |
 | [UC06 — Branching and joining](simulation-tasks/uc06-branching-and-joining.md) | Pending | Add branches converging on a root. |

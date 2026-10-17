@@ -4,6 +4,13 @@ import { attach, update, detach } from '../integrations/blazor/job-monitor.js';
 const viewer = document.querySelector('job-queue-timeline'), results = document.querySelector('#results');
 const frame = () => new Promise(resolve => setTimeout(resolve, 100));
 const assert = (value, message) => { if (!value) throw new Error(message); };
+const representedIds = () => {
+  const root=viewer.shadowRoot;
+  const ids=new Set([...root.querySelectorAll('.timeline .job')].map(n=>n.dataset.jobId));
+  for(const group of root.querySelectorAll('.timeline .cluster'))
+    for(const marker of JSON.parse(group.dataset.clusterId)) ids.add(JSON.parse(marker)[0]);
+  return ids;
+};
 let passed = 0, failed = 0;
 async function check(name, action) {
   const li = document.createElement('li'); results.append(li);
@@ -153,7 +160,7 @@ await check('focused square center aligns with the ruler and channel after resiz
   const beforeX=+marker.getAttribute('x') + +marker.getAttribute('width')/2;
   viewer.style.height='640px'; await frame();
   const resized=viewer.shadowRoot.querySelector('[data-job-id="normalize-units"] .position-marker');
-  assert(viewer.visibleWindowMs===5000,'resize preserves interval');
+  assert(viewer.visibleWindowMs<=5000,'resize preserves a readable inspection interval');
   assert(+resized.getAttribute('x') + +resized.getAttribute('width')/2===beforeX,'channel position stable');
   const viewport=viewer.shadowRoot.querySelector('.viewport'), ruler=viewer.shadowRoot.querySelector('.time-ruler');
   const left=ruler.getBoundingClientRect().left; viewport.scrollLeft=200; await frame();
@@ -200,6 +207,7 @@ await check('search reveals enqueue history and Started retains both positions w
   job.channel=0; job.observedAt='2026-09-17T11:59:59.800Z'; job.state='running';
   job.metadata={...job.metadata,enqueuedAt:enqueueTime,timestampSource:'Started'};
   viewer.setData(snapshot); await frame();
+  viewer.shadowRoot.querySelector('[data-action="refresh-inspection"]').click(); await frame();
   const nodes=viewer.shadowRoot.querySelectorAll('[data-job-id="waiting-batch"]');
   assert(nodes.length===2 && viewer.selectedJobId==='waiting-batch','two positions, same job selection');
   assert(viewer.shadowRoot.querySelector('[data-unassigned-id="cache"]'),'enqueue strip retained');
@@ -289,6 +297,183 @@ await check('edge labels and keyboard job details distinguish standalone ingest 
     'keyboard focus announces dependency and root IDs');
   assert(viewer.shadowRoot.querySelector('footer').textContent.includes('Dashed arrow = same job'),
     'visible legend explains assignment arrows');
+});
+
+await check('dense member selection resolves milliseconds and docks without covering queues', async () => {
+  viewer.showOverview();
+  const base=Date.parse(reference)-1000;
+  const snapshot={queues:[{id:'dense',name:'Dense',maxParallelism:1}],jobs:Array.from({length:15},(_,i)=>({
+    id:`dense-${i}`,name:'Ingest payload',queueId:'dense',channel:0,state:'completed',
+    observedAt:new Date(base+i).toISOString(),isRoot:true,rootJobIds:[`dense-${i}`],dependsOn:i?[`dense-${i-1}`]:[]}))};
+  viewer.setData(snapshot); viewer.setReferenceTime(reference); await frame();
+  viewer.shadowRoot.querySelector('.cluster').dispatchEvent(new MouseEvent('click',{bubbles:true})); await frame();
+  const group=viewer.shadowRoot.querySelector('.inspection-jobs');
+  assert(group.children.length===15,'all identities listed');
+  group.querySelector('[data-result="dense-7"]').click(); await frame();
+  assert(Array.from({length:15},(_,i)=>`dense-${i}`).every(id=>representedIds().has(id)),
+    'selection retains every member as a job or count square');
+  const panel=viewer.shadowRoot.querySelector('.inspection').getBoundingClientRect();
+  const viewport=viewer.shadowRoot.querySelector('.viewport-row').getBoundingClientRect();
+  assert(panel.left>=viewport.right || panel.top>=viewport.bottom,'inspector reserves space');
+  assert(!viewer.shadowRoot.querySelector('.cluster-range'),'group has no vertical range line');
+  assert(viewer.shadowRoot.querySelector('.inspection-relations [data-result="dense-6"]'),'previous root navigation');
+  assert(viewer.shadowRoot.querySelector('.inspection-relations [data-result="dense-8"]'),'next root navigation');
+  viewer.style.height='440px'; await frame();
+  assert(Array.from({length:15},(_,i)=>`dense-${i}`).every(id=>representedIds().has(id)),
+    'resizing keeps the whole group visible');
+  viewer.style.height='640px'; await frame();
+  const before=group.textContent, window=viewer.visibleWindowMs, referenceBefore=viewer.referenceTime;
+  const next=structuredClone(snapshot); next.jobs[7].state='failed';
+  next.jobs[7].observedAt=new Date(base+1000).toISOString(); viewer.setData(next); await frame();
+  assert(group.textContent===before && viewer.referenceTime===referenceBefore && viewer.visibleWindowMs===window,'captured inspection stays stable');
+  const refresh=viewer.shadowRoot.querySelector('[data-action="refresh-inspection"]');
+  assert(!refresh.hidden,'updates announced'); refresh.click(); await frame();
+  assert(viewer.selectedJobId==='dense-7' && group.textContent.includes('failed'),'refresh preserves ID and applies current state');
+  viewer.style.width='700px'; await frame();
+  const smallPanel=viewer.shadowRoot.querySelector('.inspection').getBoundingClientRect();
+  assert(smallPanel.top>=viewer.shadowRoot.querySelector('.viewport-row').getBoundingClientRect().bottom,'narrow inspector below timeline');
+  viewer.style.width='950px'; viewer.showOverview(); await frame();
+});
+await check('group dependencies summarize real pairs and same-time roots remain navigable', async () => {
+  const make=(id,channel,dependsOn=[],roots=[id])=>({id,name:'Ingest payload',queueId:'groups',channel,
+    state:'completed',observedAt:'2026-09-17T11:59:59.000Z',isRoot:true,rootJobIds:roots,dependsOn});
+  viewer.setData({queues:[{id:'groups',name:'Groups',maxParallelism:2}],jobs:[
+    make('a',0),make('b',0,['a']),make('c',1,['a','b']),make('d',1,['b'],['c'])]});
+  viewer.setReferenceTime(reference); await frame();
+  assert(viewer.shadowRoot.querySelectorAll('path.dependency').length===1,'one connector for three relationships');
+  assert(viewer.shadowRoot.querySelector('.edge-count').textContent==='×3','counted relationships');
+  assert(!viewer.shadowRoot.querySelector('.internal-count'),'no small legend below the count');
+  assert(viewer.shadowRoot.querySelector('.cluster title').textContent.includes('1 internal dependencies'),'internal dependencies remain in the tooltip');
+  viewer.focusJob('b'); await frame();
+  assert(viewer.shadowRoot.querySelector('.cluster.selected'),'same timestamp remains grouped');
+  viewer.shadowRoot.querySelector('.inspection-relations [data-result="a"]').click(); await frame();
+  assert(viewer.selectedJobId==='a','navigate actual prerequisite');
+  viewer.focusJob('c'); await frame();
+  viewer.shadowRoot.querySelector('[data-root-id="c"]').click(); await frame();
+  assert(viewer.shadowRoot.querySelectorAll('.inspection-jobs button').length===2,'inspect actual composed group across jobs');
+  assert(viewer.shadowRoot.querySelector('.inspection-note').textContent.includes('2 completed'),'current states summarized');
+  viewer.followLive(); await frame();
+});
+
+await check('refreshing a composed group includes newly observed members and handles retention', async () => {
+  const root={id:'root',queueId:'q',channel:0,state:'running',isRoot:true,rootJobIds:['root'],observedAt:reference};
+  const snapshot={queues:[{id:'q',maxParallelism:2}],jobs:[root]};
+  viewer.setData(snapshot); viewer.focusJob('root'); await frame();
+  viewer.shadowRoot.querySelector('[data-root-id="root"]').click(); await frame();
+  const next=structuredClone(snapshot);
+  next.jobs.push({...root,id:'child',channel:1,isRoot:false});
+  viewer.setData(next); await frame();
+  assert(viewer.shadowRoot.querySelectorAll('.inspection-jobs button').length===1,'captured membership remains stable');
+  viewer.shadowRoot.querySelector('[data-action="refresh-inspection"]').click(); await frame();
+  assert(viewer.shadowRoot.querySelectorAll('.inspection-jobs button').length===2,'refresh includes newly observed composed member');
+  assert(viewer.selectedJobId==='root','root selection retained');
+  viewer.setData({queues:snapshot.queues,jobs:[]}); await frame();
+  assert(viewer.selectedJobId==='root','retention does not change captured selection');
+  viewer.shadowRoot.querySelector('[data-action="refresh-inspection"]').click(); await frame();
+  assert(viewer.selectedJobId===null && viewer.shadowRoot.querySelector('.inspection').hidden,'removed selection clears safely on refresh');
+  viewer.followLive();
+});
+
+await check('CacheQ group inspection keeps its complete time span after selecting either endpoint', async () => {
+  viewer.showOverview(); viewer.style.height='640px';
+  const base=Date.parse(reference)-1000;
+  const jobs=[0,1,40].map((offset,i)=>({id:`cache-${i}`,name:`Cache job ${i}`,queueId:'cache',channel:0,
+    state:'completed',observedAt:new Date(base+offset).toISOString(),dependsOn:i?[`cache-${i-1}`]:[]}));
+  viewer.setData({queues:[{id:'cache',name:'CacheQ',maxParallelism:1}],jobs});
+  viewer.setReferenceTime(reference); await frame();
+  assert(representedIds().size===3,'all jobs represented before inspection');
+  assert(!viewer.shadowRoot.querySelector('.cluster-range'),'only a count square and dependency edges');
+  viewer.shadowRoot.querySelector('.cluster').dispatchEvent(new MouseEvent('click',{bubbles:true})); await frame();
+  assert(viewer.visibleWindowMs<5000,'inspection zooms time');
+  for(const id of ['cache-0','cache-2']) {
+    viewer.shadowRoot.querySelector(`.inspection-jobs [data-result="${id}"]`).click(); await frame();
+    assert(jobs.every(j=>representedIds().has(j.id)),'no member disappears on selection');
+    assert(!viewer.shadowRoot.querySelector('.timeline .job.dim,.timeline .cluster.dim'),'inspected siblings remain readable');
+  }
+  viewer.style.height='420px'; await frame();
+  assert(jobs.every(j=>representedIds().has(j.id)),'no member disappears on resize');
+  viewer.showOverview(); viewer.style.height='640px';
+});
+
+await check('queue history remains accessible when all CacheQ jobs leave the live interval', async () => {
+  viewer.followLive();
+  const base=Date.now()-60000;
+  const snapshot={queues:[{id:'cache',name:'CacheQ',maxParallelism:2}],jobs:[0,1,2].map(i=>({
+    id:`older-${i}`,queueId:'cache',channel:i===2?null:0,state:i===2?'waiting':'completed',
+    observedAt:new Date(base+i*10000).toISOString(),dependsOn:i?[`older-${i-1}`]:[]}))};
+  viewer.setData(snapshot); await frame();
+  const queue=viewer.shadowRoot.querySelector('[data-inspect-queue="cache"]');
+  assert(queue?.textContent.includes('3 jobs') && queue.textContent.includes('3 outside interval'),'queue count retains off-screen jobs');
+  queue.click(); await frame();
+  assert(snapshot.jobs.every(j=>representedIds().has(j.id)),'queue inspection reveals all recorded jobs including Unassigned');
+  assert(viewer.visibleWindowMs>5000,'history inspection can span longer than the live overview');
+  viewer.shadowRoot.querySelector('.inspection-jobs [data-result="older-2"]').click(); await frame();
+  assert(snapshot.jobs.every(j=>representedIds().has(j.id)),'selecting an old job keeps queue context');
+  viewer.followLive(); await frame();
+  assert(viewer.shadowRoot.querySelector('[data-inspect-queue="cache"]').textContent.includes('3 jobs'),'history remains available after returning live');
+});
+
+await check('group click separates distinct timestamps and scrolls without changing channel or time facts', async () => {
+  viewer.showOverview(); viewer.style.height='440px';
+  const base=Date.parse(reference)-1000;
+  const jobs=[0,1,40].map((offset,i)=>({id:`zoom-${i}`,queueId:'zoom',channel:0,state:'running',
+    observedAt:new Date(base+offset).toISOString()}));
+  viewer.setData({queues:[{id:'wide',maxParallelism:30},{id:'zoom',maxParallelism:1}],jobs}); viewer.setReferenceTime(reference); await frame();
+  const root=viewer.shadowRoot, x=root.querySelector('.channel-line').getAttribute('x1');
+  root.querySelector('.cluster').dispatchEvent(new MouseEvent('click',{bubbles:true})); await frame();
+  assert(root.querySelectorAll('.timeline .job').length===3 && !root.querySelector('.timeline .cluster'),'one click separates every distinct time');
+  assert(root.querySelector('.channel-line').getAttribute('x1')===x,'time zoom preserves channel width');
+  const viewport=root.querySelector('.viewport');
+  const bounds=viewport.getBoundingClientRect();
+  assert([...root.querySelectorAll('.position-marker')].every(marker=>{
+    const rect=marker.getBoundingClientRect(); return rect.left>=bounds.left+124 && rect.right<=bounds.right;
+  }),'opening the inspector keeps the group channel visible horizontally');
+  assert(viewport.scrollHeight>viewport.clientHeight,'the entire group has scrollable space');
+  const centers=[...root.querySelectorAll('.position-marker')].map(n=>+n.getAttribute('y') + +n.getAttribute('height')/2);
+  assert(Math.abs((centers[2]-centers[1])/(centers[1]-centers[0])-39)<0.001,'spacing preserves actual timestamp differences');
+  viewport.scrollTop=100; viewport.dispatchEvent(new Event('scroll')); await frame();
+  assert(root.querySelector('.time-ruler').style.transform===`translateY(${-viewport.scrollTop}px)`,'ruler follows vertical inspection scrolling');
+  root.querySelector('.inspection-jobs [data-result="zoom-2"]').click(); await frame();
+  assert(viewport.scrollTop>100,'selecting a member reveals its timeline position');
+  assert(root.querySelectorAll('.timeline .job').length===3,'selection preserves the full group');
+  viewer.showOverview(); await frame();
+  assert(viewer.visibleWindowMs===5000 && viewport.scrollTop===0,'overview restores the five-second canvas');
+  viewer.style.height='640px';
+});
+
+await check('group completion holds its square on the timeline until Follow live; click and zoom reveal its jobs', async () => {
+  viewer.followLive();
+  const base=Date.now()-1000;
+  const snapshot={queues:[{id:'retained',name:'Retained',maxParallelism:1}],jobs:[0,1].map(i=>({
+    id:`retained-${i}`,queueId:'retained',channel:0,state:'running',observedAt:new Date(base+i).toISOString()}))};
+  viewer.setData(snapshot); await frame();
+  const root=viewer.shadowRoot;
+  assert(root.querySelector('.timeline .cluster.incomplete'),'unfinished group is neutral');
+  const next=structuredClone(snapshot); next.jobs[0].state='completed'; viewer.setData(next); await frame();
+  assert(root.querySelector('.timeline .cluster.incomplete'),'one completed member does not turn the group green');
+  next.jobs[1].state='completed'; viewer.setData(next); await frame();
+  const cluster=root.querySelector('.timeline .cluster.completed');
+  assert(cluster && cluster.querySelector('.cluster-count').textContent==='2','completed group stays on the timeline');
+  assert(getComputedStyle(cluster.querySelector('.cluster-box')).stroke===getComputedStyle(cluster.querySelector('.cluster-count')).fill,'outline and count share completion color');
+  const heldReference=viewer.referenceTime, heldY=cluster.querySelector('.cluster-box').getAttribute('y');
+  // A later snapshot must hold the existing interval before its group could scroll away.
+  const now=Date.now;
+  try { Date.now=()=>base+10000; viewer.setData(next); } finally { Date.now=now; }
+  await frame();
+  assert(!viewer.isFollowingLive && viewer.referenceTime===heldReference,'view holds instead of scrolling the group away');
+  assert(root.querySelector('.cluster.completed .cluster-box').getAttribute('y')===heldY,'same completed square stays at its position');
+  assert(!root.querySelector('.group-history'),'no separate group history');
+  root.querySelector('.cluster').dispatchEvent(new MouseEvent('click',{bubbles:true})); await frame();
+  assert(root.querySelectorAll('.timeline .job.completed').length===2,'click separates completed members on the same timeline');
+  viewer.showOverview(); await frame();
+  root.querySelector('[data-action="in"]').click(); await frame();
+  assert(root.querySelectorAll('.timeline .job.completed').length===2,'zoom also separates the group without losing its jobs');
+  root.querySelector('[data-action="in"]').click(); await frame();
+  assert(root.querySelectorAll('.timeline .job.completed').length===2,'further zoom keeps all group members');
+  try { Date.now=()=>base+10000; viewer.followLive(); } finally { Date.now=now; }
+  await frame();
+  assert(viewer.isFollowingLive && viewer.visibleWindowMs===5000,'Follow live explicitly resumes the latest five-second interval');
+  assert(!root.querySelector('.timeline .cluster'),'explicit Follow live may move old groups out of the latest interval');
 });
 
 document.querySelector('#summary').textContent=`${passed} passed; ${failed} failed`;

@@ -51,9 +51,9 @@ export function normalize(snapshot) {
 export function positions(model) {
   return model.jobs.flatMap(job => {
     const phase = job.channel === null ? 'enqueue' : 'execution';
-    const current = { ...job, phase, markerId: JSON.stringify([job.id, phase]) };
+    const current = { ...job, currentState: job.state, phase, markerId: JSON.stringify([job.id, phase]) };
     if (job.channel === null || job.enqueuedTime === null) return [current];
-    return [current, { ...job, phase: 'enqueue', markerId: JSON.stringify([job.id, 'enqueue']),
+    return [current, { ...job, currentState: job.state, phase: 'enqueue', markerId: JSON.stringify([job.id, 'enqueue']),
       channel: null, observedAt: job.enqueuedAt, time: job.enqueuedTime, state: 'waiting', durationMs: null }];
   });
 }

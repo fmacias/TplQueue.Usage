@@ -20,17 +20,20 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
     [TestFixture]
     public sealed class EtlQueueRuntimeCancellationCleanupTests
     {
-        [TestCase(JobEventStatus.RootSuccessed)]
-        [TestCase(JobEventStatus.Failed)]
-        [TestCase(JobEventStatus.Canceled)]
+        [TestCase(JobEventStatus.RootSuccessed, false)]
+        [TestCase(JobEventStatus.Failed, false)]
+        [TestCase(JobEventStatus.Canceled, false)]
+        [TestCase(JobEventStatus.RootSuccessed, true)]
+        [TestCase(JobEventStatus.Failed, true)]
+        [TestCase(JobEventStatus.Canceled, true)]
         public void CacheRootTerminalEvent_ReleasesCancellationAndUsesGenericCacheEnqueue(
-            JobEventStatus terminalStatus)
+            JobEventStatus terminalStatus, bool fifo)
         {
             using var provider = CreateServiceProvider(out var cacheQueueProxy);
             var workflow = provider.GetRequiredService<TestWorkflow>();
             cacheQueueProxy.TerminalStatus = terminalStatus;
 
-            var rootJobId = EnqueueCacheRoot(workflow);
+            var rootJobId = EnqueueCacheRoot(workflow, fifo);
 
             Assert.Multiple(() =>
             {
@@ -39,8 +42,9 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             });
         }
 
-        [Test]
-        public void CacheEnqueueFailure_ReleasesCancellationBeforeRethrowing()
+        [TestCase(false)]
+        [TestCase(true)]
+        public void CacheEnqueueFailure_ReleasesCancellationBeforeRethrowing(bool fifo)
         {
             using var provider = CreateServiceProvider(out var cacheQueueProxy);
             var workflow = provider.GetRequiredService<TestWorkflow>();
@@ -48,7 +52,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 new InvalidOperationException("Simulated cache enqueue failure.");
 
             Assert.That(
-                () => EnqueueCacheRoot(workflow),
+                () => EnqueueCacheRoot(workflow, fifo),
                 Throws.TypeOf<InvalidOperationException>()
                     .With.Message.EqualTo("Simulated cache enqueue failure."));
             Assert.That(cacheQueueProxy.LastDataJobRoot, Is.Not.Null);
@@ -134,11 +138,74 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             });
         }
 
-        private static ServiceProvider CreateServiceProvider(
-            out QueueProxy cacheQueueProxy)
+        [TestCase(AvailableQueue.FIFO, false, "Enqueue")]
+        [TestCase(AvailableQueue.Parallel, false, "Enqueue")]
+        [TestCase(AvailableQueue.Cache, false, "Enqueue")]
+        [TestCase(AvailableQueue.FIFO, true, "Enqueue")]
+        [TestCase(AvailableQueue.Parallel, true, "EnqueueFifo")]
+        [TestCase(AvailableQueue.Cache, true, "EnqueueFifo")]
+        public void EnqueueMode_UsesSelectedQueueAndRegistersGraphBeforeDispatch(
+            AvailableQueue queue, bool fifo, string expectedMethod)
         {
-            var fifoQueue = CreateQueue<IFifoQ>(out _);
-            var parallelQueue = CreateQueue<IParallelQ>(out _);
+            // Arrange
+            using var provider = CreateServiceProvider(out var fifoProxy, out var parallelProxy, out var cacheProxy);
+            var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
+            var root = provider.GetRequiredService<ISampleJobFactory>().IngestMeasurementsSigleJobRoot();
+            var selected = queue == AvailableQueue.FIFO ? fifoProxy : queue == AvailableQueue.Parallel ? parallelProxy : cacheProxy;
+            using var cancellation = new CancellationTokenSource();
+            selected.BeforeEnqueue = () =>
+            {
+                Assert.That(runtime.IsActive(root.Id), Is.True);
+                Assert.That(provider.GetRequiredService<ISimulationGraphCatalog>().GetRootJobIds(root.Id),
+                    Is.EqualTo(new[] { root.Id }));
+                cancellation.Cancel();
+                Assert.That(selected.LastCancellationToken.IsCancellationRequested, Is.True,
+                    "The submitted token must remain linked to host cancellation.");
+            };
+
+            // Act
+            if (fifo) runtime.EnqueueFifo(queue, root, cancellation.Token);
+            else runtime.Enqueue(queue, root, cancellation.Token);
+
+            // Assert
+            Assert.That(selected.LastEnqueueMethod, Is.EqualTo(expectedMethod));
+            Assert.That(selected.LastDataJobRoot, Is.SameAs(root));
+            Assert.That(selected.GenericDataJobEnqueueCount, Is.EqualTo(queue == AvailableQueue.Cache ? 1 : 0));
+            Assert.That(new[] { fifoProxy, parallelProxy, cacheProxy }.Count(proxy => proxy.LastDataJobRoot != null),
+                Is.EqualTo(1));
+            Assert.That(runtime.IsActive(root.Id), Is.False, "Synchronous terminal observation releases the registration.");
+        }
+
+        [Test]
+        public void EnqueueFifo_RejectsInvalidInputAndDisposedRuntimeWithoutRetainingCancellation()
+        {
+            // Arrange
+            using var provider = CreateServiceProvider(out var cacheProxy);
+            var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
+            var root = provider.GetRequiredService<ISampleJobFactory>().IngestMeasurementsSigleJobRoot();
+
+            // Act / Assert
+            Assert.That(() => runtime.EnqueueFifo<IIngestMeasurementsPayload>(AvailableQueue.Cache, null!, CancellationToken.None),
+                Throws.ArgumentNullException);
+            Assert.That(() => runtime.EnqueueFifo(AvailableQueue.Cache, root, new CancellationToken(true)),
+                Throws.InstanceOf<OperationCanceledException>());
+            Assert.That(() => runtime.EnqueueFifo((AvailableQueue)99, root, CancellationToken.None),
+                Throws.InvalidOperationException);
+            Assert.That(runtime.IsActive(root.Id), Is.False);
+            ((IDisposable)runtime).Dispose();
+            Assert.That(() => runtime.EnqueueFifo(AvailableQueue.Cache, root, CancellationToken.None),
+                Throws.InstanceOf<ObjectDisposedException>());
+            Assert.That(cacheProxy.LastDataJobRoot, Is.Null);
+        }
+
+        private static ServiceProvider CreateServiceProvider(out QueueProxy cacheQueueProxy)
+            => CreateServiceProvider(out _, out _, out cacheQueueProxy);
+
+        private static ServiceProvider CreateServiceProvider(
+            out QueueProxy fifoQueueProxy, out QueueProxy parallelQueueProxy, out QueueProxy cacheQueueProxy)
+        {
+            var fifoQueue = CreateQueue<IFifoQ>(out fifoQueueProxy);
+            var parallelQueue = CreateQueue<IParallelQ>(out parallelQueueProxy);
             var cacheQueue = CreateQueue<ICacheQ>(out cacheQueueProxy);
             var api = API.Create(
                 CoreApi.Create(),
@@ -179,10 +246,11 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                 _runtime = runtime;
             }
             public Guid EnqueueMeasurements(AvailableQueue queue,
-                IReadOnlyList<LegacyMeasurement> measurements, CancellationToken cancellationToken)
+                IReadOnlyList<LegacyMeasurement> measurements, CancellationToken cancellationToken, bool fifo = false)
             {
                 var root = _factory.LoadMeasurementsJobRoot(measurements);
-                _runtime.Enqueue(queue, root, cancellationToken);
+                if (fifo) _runtime.EnqueueFifo(queue, root, cancellationToken);
+                else _runtime.Enqueue(queue, root, cancellationToken);
                 return root.Id;
             }
             public bool Cancel(Guid rootId) => ((EtlQueueRuntime)_runtime).Cancel(rootId);
@@ -197,7 +265,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             public void Dispose() { fifo.Dispose(); parallel.Dispose(); cache.Dispose(); }
         }
 
-        private static Guid EnqueueCacheRoot(TestWorkflow workflow)
+        private static Guid EnqueueCacheRoot(TestWorkflow workflow, bool fifo = false)
         {
             return workflow.EnqueueMeasurements(
                 AvailableQueue.Cache,
@@ -209,7 +277,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                         TemperatureUnit.Fahrenheit,
                         new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc))
                 },
-                CancellationToken.None);
+                CancellationToken.None, fifo);
         }
 
         private static IReadOnlyList<IDataJobNode> ExpandPayloadGraph(
@@ -253,6 +321,10 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
 
             public int GenericDataJobEnqueueCount { get; private set; }
 
+            public string? LastEnqueueMethod { get; private set; }
+            public CancellationToken LastCancellationToken { get; private set; }
+            public Action? BeforeEnqueue { get; set; }
+
             public int ActiveSubscriptions { get { lock (_sync) return _observers.Count; } }
 
             public IDataJobRoot? LastDataJobRoot { get; private set; }
@@ -286,10 +358,12 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                     return Subscribe(observer);
                 }
 
-                if (targetMethod.Name == nameof(IQ.Enqueue) &&
+                if ((targetMethod.Name == nameof(IQ.Enqueue) || targetMethod.Name == nameof(IParallelQ.EnqueueFifo)) &&
                     args.Length > 0 &&
                     args[0] is IJobRoot root)
                 {
+                    LastEnqueueMethod = targetMethod.Name;
+                    LastCancellationToken = (CancellationToken)args[1]!;
                     if (args[0] is IDataJobRoot dataJobRoot)
                     {
                         LastDataJobRoot = dataJobRoot;
@@ -300,6 +374,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
                         }
                     }
 
+                    BeforeEnqueue?.Invoke();
                     if (EnqueueException != null)
                     {
                         throw EnqueueException;

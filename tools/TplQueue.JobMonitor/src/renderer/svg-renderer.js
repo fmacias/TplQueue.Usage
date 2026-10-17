@@ -18,6 +18,9 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedMark
     markerWidth: 6, markerHeight: 6, orient: 'auto', markerUnits: 'userSpaceOnUse' });
   arrow.append(element('path', { d: 'M 0 0 L 8 4 L 0 8 Z', class: 'assignment-arrow' }));
   defs.append(arrow); fragment.append(defs);
+  const dependencyArrow = arrow.cloneNode(true);
+  dependencyArrow.id = 'dependency-arrow';
+  defs.append(dependencyArrow);
   for (const q of view.queues) {
     fragment.append(element('rect', { x: q.x, y: view.headerHeight, width: q.width,
       height: view.height - view.headerHeight, class: 'queue-body' }));
@@ -32,29 +35,28 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedMark
     x1: view.gutter, x2: view.width, y1: tick.y, y2: tick.y, class: 'time-grid' }));
   fragment.append(element('line', { x1: view.gutter, x2: view.width, y1: view.referenceY, y2: view.referenceY, class: 'reference-line' }));
   for (const edge of view.edges) {
+    const dim = focusedIds && !edge.relationships.some(r => focusedIds.has(r.from) && focusedIds.has(r.to));
     const path = element('path', { d: edge.path, role: 'img', 'aria-label': edge.description,
-      class: `${edge.kind} ${focusedIds && (!focusedIds.has(edge.from) || !focusedIds.has(edge.to)) ? 'dim' : ''}` });
-    if (edge.kind === 'assignment') {
-      path.setAttribute('marker-end', 'url(#assignment-arrow)');
-    }
+      class: `${edge.kind} ${dim ? 'dim' : ''}`,
+      'marker-end': `url(#${edge.kind}-arrow)` });
     title(path, edge.description);
     fragment.append(path);
+    if (edge.count > 1) fragment.append(element('text', { x: edge.labelX + 5, y: edge.labelY - 5,
+      class: `edge-count ${dim ? 'dim' : ''}`, 'aria-label': edge.description }, `×${edge.count}`));
   }
 
   const highlight = view.nodes.find(n => n.markerId === highlightedMarkerId && !n.hidden && n.time >= view.startTime && n.time <= view.referenceTime);
   if (highlight) {
     fragment.append(element('line', { x1: view.gutter, x2: view.width, y1: highlight.y, y2: highlight.y, class: 'alignment-guide' }));
-    fragment.append(element('line', { x1: highlight.x, x2: highlight.x, y1: view.plotTop, y2: view.referenceY, class: 'alignment-guide' }));
+    if (!view.clusters.some(n => n.members.some(j => j.markerId === highlight.markerId)))
+      fragment.append(element('line', { x1: highlight.x, x2: highlight.x, y1: view.plotTop, y2: view.referenceY, class: 'alignment-guide' }));
   }
   for (const n of view.markers) {
     if (n.kind === 'cluster') {
       const selected = n.members.some(j => j.id === selectedId);
       const node = element('g', { 'data-cluster-id': n.id, tabindex: '0', role: 'button',
         'aria-label': n.description, 'aria-pressed': String(selected),
-        class: `cluster ${selected ? 'selected' : ''} ${focusedIds && !n.members.some(j => focusedIds.has(j.id)) ? 'dim' : ''}` });
-      node.append(element('line', { x1: n.x, x2: n.x, y1: n.startY, y2: n.endY, class: 'cluster-range' }));
-      for (const y of [n.startY, n.endY]) node.append(element('line', {
-        x1: n.x - 5, x2: n.x + 5, y1: y, y2: y, class: 'cluster-range' }));
+        class: `cluster ${n.state} ${selected ? 'selected' : ''} ${focusedIds && !n.members.some(j => focusedIds.has(j.id)) ? 'dim' : ''}` });
       node.append(element('rect', { x: n.x - n.size / 2, y: n.y - n.size / 2,
         width: n.size, height: n.size, rx: 5, class: 'cluster-box' }));
       node.append(element('text', { x: n.x, y: n.y, 'text-anchor': 'middle',
@@ -72,6 +74,8 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedMark
       width: n.targetSize, height: n.targetSize, class: `job-outline ${n.isRoot ? 'root-node' : ''}` }));
     node.append(element('rect', { x: n.x - n.size / 2, y: n.y - n.size / 2,
       width: n.size, height: n.size, class: 'position-marker' }));
+    if (n.isRoot) node.append(element('text', { x: n.x - 8, y: n.y + 9,
+      class: 'root-badge', 'aria-label': 'Job root' }, 'R'));
     node.append(element('text', { x: n.x + 7, y: n.y - 5, 'text-anchor': 'middle',
       class: 'state-symbol', 'aria-hidden': 'true' }, symbols[n.state] ?? '?'));
     title(node, `${n.name}\n${n.relationshipText}\nQueue: ${n.queueName}\nChannel: ${n.channel ?? 'unassigned'}\nPosition: ${n.channel === null && n.enqueuedAt === null ? 'unassigned observation' : n.phase}\nState: ${n.state}\nObserved: ${n.observedAt}\nDuration: ${n.durationMs === null ? 'unknown' : `${n.durationMs} ms`}\n${n.description}\nJob snapshot metadata:\n${n.metadataText}`);
@@ -87,14 +91,14 @@ export function render(svg, view, selectedId, focusedIds, ruler, highlightedMark
     if (q.hasUnassigned) {
       const toggle = element('g', { 'data-unassigned-id': q.id, tabindex: '0', role: 'button',
         'aria-expanded': String(q.unassignedExpanded), class: 'unassigned-toggle',
-        'aria-label': `${q.unassignedExpanded ? 'Collapse' : 'Expand'} Unassigned in ${q.name}, ${q.unassignedCount} jobs, ${q.unassignedVisibleCount} in this time window` });
+        'aria-label': `${q.unassignedExpanded ? 'Collapse' : 'Expand'} Unassigned in ${q.name}, ${q.waitingCount} waiting now, ${q.historyCount} enqueue history, ${q.unassignedVisibleCount} positions in this time window` });
       toggle.append(element('rect', { x: q.unassignedLeft, y: 0, width: q.unassignedWidth,
         height: view.headerHeight, class: 'unassigned-header' }));
       toggle.append(element('text', { x: q.unassignedX, y: 20, 'text-anchor': 'middle',
         class: 'channel-label' }, 'U'));
       toggle.append(element('text', { x: q.unassignedX, y: 44, 'text-anchor': 'middle',
-        class: 'channel-label' }, `${q.unassignedExpanded ? '‹' : '›'} ${q.unassignedCount}`));
-      title(toggle, `Unassigned: ${q.unassignedCount} total; ${q.unassignedVisibleCount} in this time window. Includes retained enqueue history. Click or press Enter to ${q.unassignedExpanded ? 'collapse' : 'expand'}. Search reveals the selected job's strip.`);
+        class: 'channel-label unassigned-count', textLength: Math.min(q.unassignedWidth - 4, String(q.waitingCount).length * 8 + 20), lengthAdjust: 'spacingAndGlyphs' }, `${q.unassignedExpanded ? '‹' : '›'}${q.waitingCount}W`));
+      title(toggle, `Unassigned: ${q.waitingCount} waiting now; ${q.historyCount} retained enqueue history; ${q.unassignedCount} total positions; ${q.unassignedVisibleCount} in this time window. Click or press Enter to ${q.unassignedExpanded ? 'collapse' : 'expand'}. Search reveals the selected job's strip.`);
       fragment.append(toggle);
     }
     const separator = element('rect', { x: q.x + q.width - 4, y: 0, width: 8, height: view.height,

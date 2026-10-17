@@ -32,7 +32,7 @@ namespace TplQueue.Sample.Simulation.Composition
             return services;
         }
 
-        /// <summary>Registers continuous fresh-root FIFO arrivals at 100 ms intervals without a sample admission cap.</summary>
+        /// <summary>Registers continuous FIFO submissions to every available queue at 100 ms intervals without an admission cap.</summary>
         /// <remarks>Delivery starts through the simulation service. Completion closes arrivals without draining jobs.</remarks>
         public static IServiceCollection AddSampleMultipleFifoRootsSimulation(this IServiceCollection services)
         {
