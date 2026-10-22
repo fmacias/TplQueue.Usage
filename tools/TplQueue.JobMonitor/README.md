@@ -17,7 +17,7 @@ With Node.js 20 or later, from this directory:
 ```powershell
 node demo/server.mjs
 node scripts/check.mjs
-node --test tests/layout.test.js tests/inspection.test.js
+node --test tests/*.test.js
 ```
 
 Open `http://127.0.0.1:4178/` for the deterministic demo and
@@ -27,6 +27,20 @@ No npm installation, CDN or build step is needed. `PORT` overrides the demo port
 The server listens on loopback. Demo arrivals are synthetic and never control a queue.
 
 ## Contract
+
+The Blazor bridge accepts `{ queues, events, rootJobIds, revision, droppedEventCount }`.
+`events` contains the original camel-case `JobEventSnapshot` objects, in arrival
+order, including repeated occurrences. Each queue supplies `queueId` (the runtime
+GUID), `id` (the display group), `name` and `maxParallelism`. `rootJobIds` maps
+observed job GUIDs to their composed root GUIDs. `src/event-stream.js` exports the
+transport-independent `projectEventStream` function and produces the renderer
+contract below. It accepts numeric or named `JobEventStatus` values, validates
+queue/channel/timestamp metadata and never fabricates observations for dependencies.
+The input history is not modified or deduplicated. Other transports can use this
+same function before calling `setData`.
+The Blazor wrapper JSON-encodes the envelope with depth 2048 before interop, so
+nested job metadata does not hit the default interop depth limit. The bridge
+accepts either that JSON string or an already-decoded object.
 
 ```javascript
 import './src/job-queue-timeline.js';
@@ -67,7 +81,7 @@ Expanded strips retain the timeline's real timestamp mapping.
 
 The optional `IJobExecutionEvent` interface supplies the sample's runtime channel.
 Existing `IJobEvent` implementations remain valid and project as unassigned.
-The Blazor mapper assigns a channel position only when its channel-bearing Started
+The event-stream projection assigns a channel position only when its channel-bearing Started
 event is known, and uses that event's timestamp as `observedAt`. The optional nullable
 `enqueuedAt` field retains a historical marker in U after assignment. It requires
 an explicit timezone and is never inferred from arbitrary metadata. A dashed arrow

@@ -41,7 +41,8 @@ Simulation and their consumers. Alongside measurement and payload contracts it
 contains `ISampleJobFactory`, queue/cache wrapper interfaces, `IEtlQueueRuntime`,
 `ISimulationWorkflow`, `ISimulationService`, `ISimulationGraphCatalog` and delivery
 DTOs. Its responsibility already extends beyond ETL. Browser-specific
-`JobMonitorSnapshot` and `EtlDashboardSnapshot` remain owned by the Blazor host.
+`JobMonitorSnapshot` remains owned by the Blazor host and carries original
+`JobEventSnapshot` occurrences plus queue and composition metadata.
 
 `TplQueue.Sample.Contracts` would express this broader responsibility more clearly.
 That is a future naming proposal, not an applied project/assembly/namespace rename
@@ -146,7 +147,8 @@ delivery; restart the server for a fresh session. Pause freezes only viewing tim
 
 History, event fingerprints, graph membership, accepted-root lists and business
 measurements/summaries accumulate for the process lifetime. Neither the sample's
-arrival backlog nor retention is bounded. UC23 and UC25 are partially implemented:
+arrival backlog nor graph/business-data retention is bounded. Monitor observation
+retention is bounded independently. UC23 and UC25 are partially implemented:
 broader lifecycle controls and coordinated retention remain to be added. The
 [continuous-demo record](../development/simulation-continuous-demo.md) preserves
 history separately from active specifications.
@@ -254,18 +256,24 @@ three-job ETL chains; UC06–UC18 specify additional graph/outcome scenarios.
 This catalog is process-local and not restart-durable; UC25 covers retention.
 
 ```text
-queue execution capacity and lifecycle snapshots
-  -> EtlQueueObserver
-  -> thread-safe EtlExecutionProjectionStore
-  -> detached JobMonitorSnapshot via JobMonitorMapper
+runtime IJobEvent
+  -> JobMonitorObserver (synchronous Adapter snapshot capture)
+  -> JobMonitorStore (original immutable JobEventSnapshot occurrences)
+  -> JobMonitorSnapshot (retained events + queue capacity + composed memberships)
   -> Dashboard InvokeAsync / JobMonitor Razor wrapper
-  -> JS snapshot bridge -> job-queue-timeline
+  -> JS bridge -> event-stream.js -> job-queue-timeline
 ```
 
-The browser sees stable presentation DTOs, never IJobEvent, live jobs, payload
-graphs, schedulers or synchronization objects. The singleton store owns execution
-facts; selection, viewport, reference time and component resources belong to each
-circuit. Snapshots remain handwritten contracts requiring normal semantic review.
+`Presentation/Monitoring` separates observer capture, queue lookup, retention and
+transport. There is no per-job C# state DTO or ETL mapper chain. The browser receives
+detached metadata, including exception diagnostics, never raw events, live jobs,
+payloads or exceptions. Diagnostics are omitted from renderer metadata. The
+singleton store retains observations; each circuit owns selection, viewport,
+reference time and component resources. The pure JavaScript projection derives
+positions without changing the original stream.
+`JobMonitorJson` serializes the envelope with maximum JSON depth 2048 and sends
+the resulting string through interop. The bridge parses it before projection;
+this preserves deep dependency metadata without relying on interop's default depth.
 
 ## Logical execution channels
 
@@ -306,15 +314,20 @@ Queue MaxParallelism is read from the configured queue instances.
 
 ## Monitor contract and behavior
 
-`JobMonitorSnapshot` contains queue ID/name/capacity and individual job ID,
-all known root memberships (plus the compatible singular root), name, description, channel, observation time, normalized
-state, duration when known, explicit dependency IDs, bounded metadata and root flag.
-The runtime currently supplies no description; the mapper leaves it empty.
-Metadata includes observer event type, retry count and duration provenance.
-Raw exceptions and payloads are not passed to JavaScript. The projection's
-existing error summary remains available to C# consumers.
+`JobMonitorSnapshot` contains ordered `JobEventSnapshot` occurrences, queue
+runtime/display IDs and capacity, composed root memberships, an accepted-occurrence
+revision and an expired-observation count. Repeated Running and RootSuccessed
+observations remain separate entries, including equal-valued callbacks. There is
+no producer event ID, so metadata fingerprint deduplication would lose occurrences.
 
-Assigned node time uses ChannelStartedAt, captured only from a channel-bearing
+`event-stream.js` derives one current renderer job per observed ID. It normalizes
+states, accumulates direct dependency IDs, resolves lifecycle times and associates
+channels with Started observations. Configured queue capacity and composed root
+membership remain explicit metadata because events cannot supply them. The renderer
+receives bounded event/retry/timestamp metadata. Exception diagnostics remain in
+the original snapshots, outside the renderer model. Description remains empty.
+
+Assigned node time uses a channel start captured only from a channel-bearing
 Started event. Running, retry and terminal observations do not substitute their
 timestamps for channel acquisition. A late Started event enriches the position
 only for the captured channel once a job is terminal. Later observations of that
@@ -390,15 +403,13 @@ coalesces pending snapshots, and tolerates circuit disconnection during cleanup.
 The page dispatches observer notifications through InvokeAsync, coalesces queued
 refreshes and unsubscribes on disposal. No observer thread calls JavaScript.
 
-The page loads one initial snapshot and then refreshes only for new accepted
-`IJobEvent` observations. Duplicate/rejected events do not notify the view.
-The wrapper tracks snapshot identity so selection callbacks and unrelated parent
-renders do not resend data. Replace detached snapshots; never mutate a delivered
-instance. Several observations may be coalesced into the latest snapshot: DTOs
-represent accumulated job state, not a one-to-one event log or a CLR interface
-serialization. The standalone component receives `setData` calls from its host;
-it has no runtime subscription or polling timer. Its one-shot redraw scheduler
-coalesces incoming data, user input and resize requests, and stops when idle.
+The page subscribes before loading its initial retained window, then refreshes on
+each accepted observation. Rejected input does not notify; identical observations
+do notify and remain separate. Coalescing sends a complete retained window, so
+intermediate occurrences survive even if several notifications become one render.
+A late circuit receives that same window. Interop snapshot identity checks avoid
+resends on unrelated renders. The bridge projects before calling `setData`; it has
+no polling timer. Selection, resize and user navigation can redraw locally.
 
 MSBuild synchronizes the single component source tree into the ignored
 `wwwroot/job-monitor` directory before static asset discovery, then copies assets
@@ -406,9 +417,9 @@ for build/publish. This supports source-directory launches and published hosts.
 Stale generated files are removed; Debug browser tests are excluded from publish.
 Do not manually edit generated copies.
 ChartJS, ScatterChart, Bootstrap package/assets and the former details panel are
-removed from the sample. The previous pure C# mapper remains only under the
-integration test project's `Legacy/` directory to preserve existing tests;
-it is not part of the host or its browser contract.
+removed from the sample. The obsolete ScatterChart mapper and its retired-contract
+tests have been removed. Store/capture tests cover the observation boundary;
+JavaScript event-stream tests cover timeline semantics alongside renderer/browser tests.
 
 ## Validation
 
@@ -422,9 +433,17 @@ HTTP/prerender checks do not establish interactive circuit behavior.
 ## Remaining boundaries and future work
 
 CacheQ here uses process-local memory, hydration and registered handlers; it is
-not a durable spool or replayable event log. Projection retention is currently
-unbounded for the process session; a continuous production stream needs explicit
-retention and snapshot sizing. Observer delivery remains asynchronous and
+not a durable spool or replayable event log. `JobMonitor:MaximumEvents` bounds
+retained observation count (default 20,000). The store evicts entire jobs in
+first-observed order, including active jobs and a single oversized job. Later
+observations may introduce an evicted ID again; missing earlier facts remain unknown.
+Surviving histories retain all captured positions. The page reports expired events;
+new windows remove evicted jobs from the live model. An inspection already holding
+a snapshot retains it until refresh under the existing UI rules. No unbounded
+fingerprint index remains. Snapshot graph sizes are not byte-bounded; Simulation
+membership and business-data retention remain separate future work. Windows are
+currently replaced in full rather than transmitted incrementally.
+Observer delivery remains asynchronous and
 best-effort. WaitAsync does not wait for observers or cache acknowledgment.
 
 Future implementations stay in Usage. Product requirements belong in the sample's

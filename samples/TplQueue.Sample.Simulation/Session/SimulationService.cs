@@ -37,17 +37,8 @@ namespace TplQueue.Sample.Simulation.Session
                     throw new InvalidOperationException("The simulation can start only once.");
                 cancellationToken.ThrowIfCancellationRequested();
                 _started = true;
-                try
-                {
-                    _runtime.ResumePolling();
-                    foreach (var workflow in _workflows) workflow.Start(cancellationToken);
-                }
-                catch
-                {
-                    // Begin cleanup immediately; StopAsync lets the host await every pending submission.
-                    _ = StopAsync();
-                    throw;
-                }
+                _runtime.ResumePolling();
+                foreach (var workflow in _workflows) workflow.Start(cancellationToken);
             }
         }
 
@@ -63,8 +54,7 @@ namespace TplQueue.Sample.Simulation.Session
             return _runtime.Subscribe(observer);
         }
 
-        public IReadOnlyList<ScenarioDeliverySnapshot> GetSnapshot() =>
-            Array.AsReadOnly(_workflows.Select(workflow => workflow.GetSnapshot()).ToArray());
+        public IReadOnlyList<ScenarioDeliverySnapshot> GetSnapshot() => throw new NotImplementedException("not used");
 
         private static async Task StopWorkflowAsync(ISimulationWorkflow workflow)
         {

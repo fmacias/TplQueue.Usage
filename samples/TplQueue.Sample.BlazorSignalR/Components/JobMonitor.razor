@@ -17,7 +17,7 @@
 
     protected override void OnParametersSet()
     {
-        // The parent replaces this detached snapshot only after a projection change.
+        // The parent replaces this retained observation window after a store notification.
         // Selection callbacks and unrelated parent renders must not resend it.
         if (ReferenceEquals(_observedSnapshot, Snapshot)) return;
         _observedSnapshot = Snapshot;
@@ -40,7 +40,7 @@
             while (!_disposed && _sentRevision != _revision)
             {
                 var revision = _revision;
-                await _module.InvokeVoidAsync("update", _element, Snapshot);
+                await _module.InvokeVoidAsync("update", _element, JobMonitorJson.Serialize(Snapshot));
                 _sentRevision = revision;
             }
         }

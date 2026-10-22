@@ -1,5 +1,5 @@
 using Fmacias.TplQueue.Contracts;
-using TplQueue.Sample.Simulation.Runtime;
+using TplQueue.Sample.Simulation.Graphs;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
 

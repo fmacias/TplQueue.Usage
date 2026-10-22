@@ -1,7 +1,8 @@
 using Fmacias.TplQueue.Contracts;
 using Microsoft.Extensions.Logging.Abstractions;
 using TplQueue.Sample.BlazorSignalR.Application;
-using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
+using TplQueue.Sample.BlazorSignalR.Presentation.Monitoring;
+using Fmacias.TplQueue;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Session;
 
@@ -21,11 +22,12 @@ public sealed class SimulationHostedServiceTests
         var runtime = new RecordingRuntime(calls, failPolling);
         var first = new RecordingWorkflow("first", calls, false);
         var second = new RecordingWorkflow("second", calls, failWorkflowStart);
-        var store = new EtlExecutionProjectionStore(new EtlQueueCatalog(new[]
+        var store = new JobMonitorStore(new JobMonitorQueueCatalog(new[]
         {
-            new EtlQueueDescriptor(AvailableQueue.FIFO, Guid.NewGuid(), "fifo", "FIFO", 0)
-        }), NullLogger<EtlExecutionProjectionStore>.Instance);
-        var observer = new EtlQueueObserver(store, NullLogger<EtlQueueObserver>.Instance);
+            new JobMonitorQueue(Guid.NewGuid(), "fifo", "FIFO", 1)
+        }), NullLogger<JobMonitorStore>.Instance);
+        var api = Helper.GetApi(new Dictionary<string, IRetryPolicyOptions>(), new Dictionary<string, IQOptions>());
+        var observer = new JobMonitorObserver(store, NullLogger<JobMonitorObserver>.Instance, api.ObserverFactory());
         var simulation = new SimulationService(new[] { first, second }, runtime);
         using var host = new SampleEtlDemoHostedService(simulation, observer,
             NullLogger<SampleEtlDemoHostedService>.Instance);

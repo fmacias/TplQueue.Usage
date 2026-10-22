@@ -105,8 +105,17 @@ await check('history scrollbar input moves reference', async () => {
 });
 await check('adapter replaces subscriptions and detaches safely', async () => {
   let calls=0; const callback={invokeMethodAsync:async()=>{calls++;}};
-  attach(viewer,callback); attach(viewer,callback); update(viewer,sampleData()); viewer.focusJob('root-summary');
+  const observations = {
+    queues: [{ id: 'parallel', queueId: 'runtime-queue', name: 'ParallelQ', maxParallelism: 3 }],
+    events: [{ status: 4, timestamp: reference, executionChannel: 1, retryCount: 0,
+      jobInfo: { id: 'root-summary', name: 'Summary', crossQueueId: 'runtime-queue', dependencies: [] } }],
+    rootJobIds: { 'root-summary': ['root-summary'] }
+  };
+  attach(viewer,callback); attach(viewer,callback); update(viewer,JSON.stringify(observations)); viewer.focusJob('root-summary');
   assert(calls===1,'no duplicate callbacks'); detach(viewer); viewer.focusJob('root-summary'); assert(calls===1,'detached');
+  update(viewer,{ ...observations, events: [] });
+  assert(viewer.selectedJobId==='root-summary','detached updates are ignored');
+  viewer.setData(sampleData()); viewer.setReferenceTime(reference);
 });
 await check('disconnect and reconnect retain one active listener', async () => {
   viewer.remove(); document.body.append(viewer); await frame();

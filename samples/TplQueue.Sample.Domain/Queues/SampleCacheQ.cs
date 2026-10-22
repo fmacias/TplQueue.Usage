@@ -1,7 +1,5 @@
 ﻿using Fmacias.TplQueue.Contracts;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Threading;
 using TplQueue.Sample.Etl.Contracts;
 
 namespace TplQueue.Sample.Domain.Queues
@@ -17,8 +15,7 @@ namespace TplQueue.Sample.Domain.Queues
             if (queueFactory == null) throw new ArgumentNullException(nameof(queueFactory));
             if (logger == null) throw new ArgumentNullException(nameof(logger));
             if (sampleCache == null) throw new ArgumentNullException(nameof(sampleCache));
-            InnerCacheQ = queueFactory.CacheQ(() => sampleCache.Cache, logger,
-                queueFactory.Parallel("CacheQ", logger));
+            InnerCacheQ = queueFactory.CacheQ(() => sampleCache.Cache, logger, queueFactory.Parallel("CacheQ", logger));
         }
 
         public ICacheQ InnerCacheQ { get; }

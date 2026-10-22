@@ -74,6 +74,14 @@ see [graph identity](docs/architecture/blazor-consumer-sample.md#simulation-grap
 Assigned positions use backend Started timestamps. The collapsible Unassigned strip retains recorded enqueue markers after assignment, with directed connectors to Started positions when both are visible. Both markers select the same job.
 After its initial snapshot, the Blazor monitor refreshes data when new observer events change the projection. Live time advances on snapshot arrival; the idle view has no periodic refresh. User interactions and resizing still redraw locally.
 
+The observer captures each callback as an immutable `JobEventSnapshot`. The host
+retains these objects directly and sends a bounded observation window with queue
+capacity and graph memberships. `src/event-stream.js` derives the renderer's current
+positions; there is no `JobMonitorJob` or ETL DTO-to-DTO mapping chain.
+`JobMonitor:MaximumEvents` defaults to 20,000. Retention evicts whole jobs in
+first-observed order, including active or oversized jobs, and reports expired
+observations in the dashboard. Equal-valued occurrences remain distinct.
+
 `TplQueue.Sample.Etl.Contracts` supplies shared sample interfaces and DTOs beyond
 ETL, including workflow/session, runtime and graph membership contracts.
 `TplQueue.Sample.Contracts` is a proposed future name; no rename is applied or
@@ -101,7 +109,9 @@ package defects or blanket blockers for the use-case catalog.
 Usage-owned work remains in the specifications: varied schedules and burst
 accounting (UC09/UC19), cancellation contract exposure (UC17), explicit lifecycle
 extensions (UC23), and bounded projection/graph/business-data retention (UC25).
-Current continuous operation is already implemented; bounded retention is not.
+Continuous operation and bounded monitor observation retention are implemented.
+Coordinated graph/business-data retention and byte limits on individual snapshots
+remain future work.
 
 ## Public package consumption
 

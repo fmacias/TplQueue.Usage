@@ -22,13 +22,19 @@ contradictions rather than silently reconciling repositories.
 
 | Component | Owns |
 | --- | --- |
-| `samples/TplQueue.Sample.BlazorSignalR` | Host, DI composition, observer projection, presentation DTOs and Blazor frontend |
+| `samples/TplQueue.Sample.BlazorSignalR` | Host, DI composition, snapshot capture/retention, queue and membership metadata, and Blazor frontend |
 | `samples/TplQueue.Sample.Domain` | Job/graph factories, payloads, handlers, business data and queue/cache wrappers |
 | `samples/TplQueue.Sample.Etl.Contracts` | Shared sample interfaces and DTOs, including non-ETL simulation contracts |
 | `samples/TplQueue.Sample.Simulation` | Workflows, scheduling, admission, session lifecycle, runtime access and graph membership; references Contracts, not Domain |
 | `tools/TplQueue.JobMonitor` | Maintained JavaScript Web Component and bridge assets; generated sample copies are not source |
 
 Preserve runtime queue identity between submission, observers and the queue catalog.
+The monitor boundary accepts immutable `JobEventSnapshot` occurrences directly.
+Keep event retention in `Presentation/Monitoring`, separate from the JavaScript
+timeline projection in `tools/TplQueue.JobMonitor/src/event-stream.js`. Do not
+deduplicate occurrences by their metadata or reintroduce ETL-specific job DTOs.
+Full retained windows bootstrap late circuits and preserve all retained events
+across coalesced updates; retention can explicitly expire whole jobs.
 Reuse `ScheduledWorkflow` and its `System.Threading.Timer` ownership. The host owns
 workloads; browsers observe them. Preserve observer-driven snapshots, actual
 execution-channel metadata and the existing JobMonitor integration. Read the

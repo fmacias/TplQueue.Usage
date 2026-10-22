@@ -2,12 +2,10 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using Fmacias.TplQueue.Contracts;
 using Fmacias.TplQueue.Core;
-using global::Fmacias.TplQueue;
 using Microsoft.Extensions.DependencyInjection;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Composition;
 using TplQueue.Sample.Domain.Composition;
-using TplQueue.Sample.Simulation.Runtime;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
 

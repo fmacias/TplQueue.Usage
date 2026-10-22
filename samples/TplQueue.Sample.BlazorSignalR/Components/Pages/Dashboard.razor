@@ -1,7 +1,7 @@
 @page "/"
 @rendermode InteractiveServer
 @implements IDisposable
-@inject IEtlExecutionProjectionStore ProjectionStore
+@inject IJobMonitorStore MonitorStore
 @inject ISimulationService Simulation
 @inject ILogger<Dashboard> Logger
 
@@ -17,23 +17,28 @@
         </button>
     </div>
 </header>
+@if (_snapshot.DroppedEventCount > 0)
+{
+    <p role="status">Showing retained history. @_snapshot.DroppedEventCount older observations have expired.</p>
+}
 @if (_stopError != null)
 {
     <p role="alert">@_stopError</p>
 }
-<section class="monitor-host" aria-label="ETL execution timeline">
+<section class="monitor-host" aria-label="Job execution timeline">
     <JobMonitor Snapshot="_snapshot" JobSelected="OnJobSelected" />
 </section>
 <div class="visually-hidden" aria-live="polite">
     @foreach (var queue in _queues)
     {
-        <span data-queue="@queue.GroupId" data-completed="@queue.CompletedCount" data-total="@queue.JobCount">@queue.DisplayName: @queue.CompletedCount of @queue.JobCount completed.</span>
+        <span data-queue="@queue.Id" data-completed="@queue.Completed" data-total="@queue.Total">@queue.Name: @queue.Completed of @queue.Total completed.</span>
     }
 </div>
 
 @code {
-    private JobMonitorSnapshot _snapshot = new(Array.Empty<JobMonitorQueue>(), Array.Empty<JobMonitorJob>());
-    private IReadOnlyList<EtlQueueSnapshot> _queues = Array.Empty<EtlQueueSnapshot>();
+    private JobMonitorSnapshot _snapshot = JobMonitorSnapshot.Empty;
+    private IReadOnlyList<(string Id, string Name, int Total, int Completed)> _queues =
+        Array.Empty<(string, string, int, int)>();
     private Guid? _selectedJobId;
     private volatile bool _disposed;
     private int _refreshPending;
@@ -43,7 +48,7 @@
 
     protected override void OnInitialized()
     {
-        ProjectionStore.Changed += OnProjectionChanged;
+        MonitorStore.Changed += OnObservationsChanged;
         Refresh();
         _arrivalsStopped = Simulation.Completion.IsCompleted;
         _ = ObserveDeliveryCompletionAsync();
@@ -90,12 +95,22 @@
 
     private void Refresh()
     {
-        var state = ProjectionStore.GetSnapshot();
-        _queues = state.Queues;
-        _snapshot = JobMonitorMapper.Map(state);
+        _snapshot = MonitorStore.GetSnapshot();
+        // Accessible queue totals concern distinct observed jobs, not the number of occurrences.
+        _queues = _snapshot.Queues.Select(queue =>
+        {
+            var jobs = _snapshot.Events.Where(e => e.JobInfo.CrossQueueId == queue.QueueId)
+                .GroupBy(e => e.JobInfo.Id).ToArray();
+            var completed = jobs.Count(events => events
+                .Where(e => e.Status is JobEventStatus.Successed or JobEventStatus.RootSuccessed or
+                    JobEventStatus.Failed or JobEventStatus.Canceled)
+                .Reverse().OrderByDescending(e => e.Timestamp).FirstOrDefault()?.Status is
+                    JobEventStatus.Successed or JobEventStatus.RootSuccessed);
+            return (queue.Id, queue.Name, jobs.Length, completed);
+        }).ToArray();
     }
 
-    private void OnProjectionChanged(object? sender, EventArgs args)
+    private void OnObservationsChanged(object? sender, EventArgs args)
     {
         if (_disposed || Interlocked.Exchange(ref _refreshPending, 1) != 0) return;
         _ = InvokeAsync(() =>
@@ -115,6 +130,6 @@
         _disposed = true;
         _viewLifetime.Cancel();
         _viewLifetime.Dispose();
-        ProjectionStore.Changed -= OnProjectionChanged;
+        MonitorStore.Changed -= OnObservationsChanged;
     }
 }

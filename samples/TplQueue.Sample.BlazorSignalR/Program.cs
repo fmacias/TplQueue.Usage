@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.DataProtection;
 using Fmacias.TplQueue.Core;
 using Fmacias.TplQueue.Microsoft.DependencyInjection;
 using TplQueue.Sample.BlazorSignalR.Components;
@@ -13,8 +12,7 @@ builder.Services.AddSampleDomain();
 builder.Services.AddSampleEtlWorkflow();
 builder.Services.AddSampleSingleJobSimulation();
 builder.Services.AddSampleMultipleFifoRootsSimulation();
-builder.Services.AddMeasurementEtlConsumer();
-builder.Services.AddSingleton<IDataProtectionProvider>(new EphemeralDataProtectionProvider());
+builder.Services.AddMeasurementEtlConsumer(builder.Configuration);
 
 var app = builder.Build();
 app.Services.RegisterSampleEtlPayloadHandlers();

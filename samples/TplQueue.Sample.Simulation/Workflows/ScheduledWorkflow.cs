@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using TplQueue.Sample.Etl.Contracts;
-using TplQueue.Sample.Simulation.Runtime;
 
 namespace TplQueue.Sample.Simulation.Workflows
 {
@@ -27,21 +26,14 @@ namespace TplQueue.Sample.Simulation.Workflows
 
         /// <summary>Configures the selected queues and interval for continuous arrivals.</summary>
         /// <param name="runtime">The shared runtime used to enqueue newly created roots.</param>
-        /// <param name="queues">Distinct target queues; null selects all available queues.</param>
         /// <param name="intervalMilliseconds">Positive interval between arrival attempts.</param>
-        protected ScheduledWorkflow(IEtlQueueRuntime runtime, IEnumerable<AvailableQueue>? queues = null,
-            int intervalMilliseconds = 3000)
+        /// 
+        protected ScheduledWorkflow(IEtlQueueRuntime runtime, int intervalMilliseconds = 3000)
         {
             Runtime = runtime ?? throw new ArgumentNullException(nameof(runtime));
             if (intervalMilliseconds <= 0) throw new ArgumentOutOfRangeException(nameof(intervalMilliseconds));
             _intervalMilliseconds = intervalMilliseconds;
-            foreach (var queue in queues ?? (AvailableQueue[])Enum.GetValues(typeof(AvailableQueue)))
-            {
-                if (!Enum.IsDefined(typeof(AvailableQueue), queue) || _queues.Contains(queue))
-                    throw new ArgumentException("Queues must be defined and distinct.", nameof(queues));
-                _queues.Add(queue);
-            }
-            if (_queues.Count == 0) throw new ArgumentException("At least one queue is required.", nameof(queues));
+            _queues = new List<AvailableQueue>() { AvailableQueue.Cache, AvailableQueue.FIFO, AvailableQueue.Parallel };
         }
 
         public Task Completion => _completion.Task;
@@ -58,18 +50,9 @@ namespace TplQueue.Sample.Simulation.Workflows
                 cancellationToken.ThrowIfCancellationRequested();
                 _started = true;
                 _cancellationToken = cancellationToken;
-                try
-                {
-                    // Assign a disabled timer first: even a zero-offset callback sees fully initialized state.
-                    _timer = new Timer(OnTick, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
-                    _timer.Change(StartupOffsetMilliseconds, _intervalMilliseconds);
-                }
-                catch
-                {
-                    _stopped = true;
-                    CompleteIfFinished();
-                    throw;
-                }
+                _timer = new Timer(OnTick, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+                _timer.Change(StartupOffsetMilliseconds, _intervalMilliseconds);
+
             }
         }
 
@@ -96,75 +79,17 @@ namespace TplQueue.Sample.Simulation.Workflows
 
         private void OnTick(object? state)
         {
-            lock (_sync)
-            {
-                // Dispose does not retract queued callbacks. This gate also prevents overlapping submissions.
-                if (_stopped) return;
-                if (_cancellationToken.IsCancellationRequested)
-                {
-                    _stopped = true;
-                    ReleaseTimer();
-                    CompleteIfFinished();
-                    return;
-                }
-                _ticks++;
-                if (_busy)
-                {
-                    _skippedTicks++;
-                    return;
-                }
-                _busy = true;
-            }
-
-            // The timer already runs on a thread-pool thread; no extra Task.Run or event adapter is needed.
-            var failed = false;
             try
             {
                 foreach (var queue in _queues)
                 {
-                    lock (_sync)
-                    {
-                        if (_stopped || _cancellationToken.IsCancellationRequested) return;
-                        // This submission is admitted. StopAsync waits for its callback to finish.
-                    }
-                    try
-                    {
-                        var rootId = Submit(queue, _cancellationToken);
-                        lock (_sync) _acceptedRootIds.Add(rootId);
-                    }
-                    catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
-                    {
-                        throw;
-                    }
-                    catch (Exception exception)
-                    {
-                        // A failed queue must not prevent delivery to the remaining queues.
-                        failed = true;
-                        lock (_sync) _lastError = exception.Message;
-                    }
+                    var rootId = Submit(queue, _cancellationToken);
+                    lock (_sync) _acceptedRootIds.Add(rootId);
                 }
             }
             catch (OperationCanceledException) when (_cancellationToken.IsCancellationRequested)
             {
                 lock (_sync) _stopped = true;
-            }
-            catch (Exception exception)
-            {
-                lock (_sync)
-                {
-                    failed = true;
-                    _lastError = exception.Message;
-                }
-            }
-            finally
-            {
-                lock (_sync)
-                {
-                    if (failed) _failedTicks++;
-                    _busy = false;
-                    if (_cancellationToken.IsCancellationRequested) _stopped = true;
-                    CompleteIfFinished();
-                }
             }
         }
 

@@ -1,35 +1,24 @@
 using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-using TplQueue.Sample.Domain.Payloads;
 using TplQueue.Sample.Etl.Contracts;
 
 namespace TplQueue.Sample.Domain.Handlers
 {
-    internal sealed class IngestMeasurementsHandler : PayloadHandler<IngestMeasurementsPayload>
+    internal sealed class IngestMeasurementsHandler : PayloadHandler<IIngestMeasurementsPayload>
     {
         private const int SampleExecutionDelayMilliseconds = 500;
         private readonly IEtlExecutionDataStore _store;
         private readonly ILogger<IngestMeasurementsHandler> _logger;
 
-        private IngestMeasurementsHandler(IEtlExecutionDataStore store, ILogger<IngestMeasurementsHandler> logger)
+        public IngestMeasurementsHandler(IEtlExecutionDataStore store, ILogger<IngestMeasurementsHandler> logger)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public static IngestMeasurementsHandler Create(IEtlExecutionDataStore store, ILogger<IngestMeasurementsHandler> logger)
-        {
-            return new IngestMeasurementsHandler(store, logger);
-        }
-
         protected override async Task HandleAsync(
-            IngestMeasurementsPayload payload,
+            IIngestMeasurementsPayload payload,
             CancellationToken cancellationToken)
         {
-            // Keep the real sample operation visible long enough to inspect in the timeline.
             await Task.Delay(
                 SampleExecutionDelayMilliseconds,
                 cancellationToken).ConfigureAwait(false);

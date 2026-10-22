@@ -1,7 +1,5 @@
 ﻿using Fmacias.TplQueue.Contracts;
 using Microsoft.Extensions.Logging;
-using System;
-using System.Threading;
 using TplQueue.Sample.Etl.Contracts;
 
 namespace TplQueue.Sample.Domain.Queues

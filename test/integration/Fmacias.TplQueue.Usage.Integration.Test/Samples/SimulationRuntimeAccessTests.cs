@@ -2,10 +2,11 @@ using System.Reflection;
 using Fmacias.TplQueue.Contracts;
 using Microsoft.Extensions.DependencyInjection;
 using TplQueue.Sample.BlazorSignalR.Composition;
-using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
+using TplQueue.Sample.BlazorSignalR.Presentation.Monitoring;
+using Fmacias.TplQueue;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Composition;
-using TplQueue.Sample.Simulation.Runtime;
+using TplQueue.Sample.Simulation.Execution;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
 
@@ -20,6 +21,8 @@ public sealed class SimulationRuntimeAccessTests
         var resolutions = 0;
         var services = new ServiceCollection();
         services.AddLogging();
+        var api = Helper.GetApi(new Dictionary<string, IRetryPolicyOptions>(), new Dictionary<string, IQOptions>());
+        services.AddSingleton(api.ObserverFactory());
         services.AddTransient<ISampleFifoQ>(_ => { resolutions++; return queues; });
         services.AddTransient<ISampleParallelQ>(_ => { resolutions++; return queues; });
         services.AddTransient<ISampleCacheQ>(_ => { resolutions++; return queues; });
@@ -30,8 +33,8 @@ public sealed class SimulationRuntimeAccessTests
 
         // Act
         var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
-        var catalog = provider.GetRequiredService<EtlQueueCatalog>();
-        using (runtime.Subscribe(provider.GetRequiredService<EtlQueueObserver>()))
+        var catalog = provider.GetRequiredService<JobMonitorQueueCatalog>();
+        using (runtime.Subscribe(provider.GetRequiredService<JobMonitorObserver>()))
         {
             runtime.ResumePolling();
 

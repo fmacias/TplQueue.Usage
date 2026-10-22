@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using TplQueue.Sample.Etl.Contracts;
-using TplQueue.Sample.Simulation.Runtime;
 
 namespace TplQueue.Sample.Simulation.Workflows.Etl
 {

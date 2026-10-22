@@ -1,14 +1,12 @@
 using Fmacias.TplQueue.Contracts;
 using Microsoft.Extensions.DependencyInjection;
-using System;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Domain.Queues;
 using TplQueue.Sample.Domain.Handlers;
 using TplQueue.Sample.Domain.Factories;
 using TplQueue.Sample.Domain.Cache;
 using TplQueue.Sample.Domain.Payloads;
-using TplQueue.Sample.Domain.Stores;
-using Microsoft.Extensions.Logging;
+
 using Fmacias.TplQueue.Cache.MemCache;
 
 namespace TplQueue.Sample.Domain.Composition
@@ -26,7 +24,9 @@ namespace TplQueue.Sample.Domain.Composition
             services.AddTransient<ISampleParallelQ, SampleParallelQ>();
             services.AddTransient<ISampleFifoQ, SampleFifoQ>();
             services.AddTransient<ISampleCacheQ, SampleCacheQ>();
-            services.AddSingleton<IEtlExecutionDataStore, EtlExecutionDataStore>();
+            services.AddSingleton<IngestMeasurementsHandler>();
+            services.AddSingleton<TransformMeasurementsHandler>();
+            services.AddSingleton<LoadMeasurementsHandler>();
             services.AddSingleton<ISampleJobFactory, SampleJobFactory>();
             return services;
         }
@@ -39,12 +39,10 @@ namespace TplQueue.Sample.Domain.Composition
         public static void RegisterSampleEtlPayloadHandlers(this IServiceProvider serviceProvider)
         {
             if (serviceProvider == null) throw new ArgumentNullException(nameof(serviceProvider));
-            var api = serviceProvider.GetRequiredService<IApi>();
-            var store = serviceProvider.GetRequiredService<IEtlExecutionDataStore>();
-         
-            var ingestHandler = IngestMeasurementsHandler.Create(store, serviceProvider.GetRequiredService<ILogger<IngestMeasurementsHandler>>());
-            var transformHandler = TransformMeasurementsHandler.Create(store, serviceProvider.GetRequiredService<ILogger<TransformMeasurementsHandler>>());
-            var loadHandler = LoadMeasurementsHandler.Create(store, serviceProvider.GetRequiredService<ILogger<LoadMeasurementsHandler>>());
+            var api = serviceProvider.GetRequiredService<IApi>();        
+            var ingestHandler = serviceProvider.GetRequiredService<IngestMeasurementsHandler>();
+            var transformHandler = serviceProvider.GetRequiredService<TransformMeasurementsHandler>();
+            var loadHandler = serviceProvider.GetRequiredService<LoadMeasurementsHandler>();
 
             api.RegisterPayloadHandler(
                 IngestMeasurementsPayload.HandlerId,

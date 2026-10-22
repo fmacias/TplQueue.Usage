@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading;
 using TplQueue.Sample.Etl.Contracts;
 
-namespace TplQueue.Sample.Simulation.Runtime
+namespace TplQueue.Sample.Simulation.Execution
 {
     internal sealed class EtlQueueRuntime : IEtlQueueRuntime, IDisposable
     {
@@ -15,7 +15,6 @@ namespace TplQueue.Sample.Simulation.Runtime
         private readonly ISampleParallelQ _sampleParallel;
         private readonly ISampleCacheQ _sampleCacheQ;
         private readonly ILogger<EtlQueueRuntime> _logger;
-        private readonly ISimulationGraphCatalog _graphs;
         private readonly object _disposeSync = new object();
         private bool _disposed;
         private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _cancellations =
@@ -25,14 +24,12 @@ namespace TplQueue.Sample.Simulation.Runtime
             ISampleFifoQ fifoQ,
             ISampleParallelQ parallelQ,
             ISampleCacheQ cacheQ,
-            ILogger<EtlQueueRuntime> logger,
-            ISimulationGraphCatalog graphs)
+            ILogger<EtlQueueRuntime> logger)
         {
             _sampleFifo = fifoQ ?? throw new ArgumentNullException(nameof(fifoQ));
             _sampleParallel = parallelQ ?? throw new ArgumentNullException(nameof(parallelQ));
             _sampleCacheQ = cacheQ ?? throw new ArgumentNullException(nameof(cacheQ));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-            _graphs = graphs ?? throw new ArgumentNullException(nameof(graphs));
         }
 
         /// <summary>Submits a root through the selected queue's normal enqueue operation.</summary>
@@ -65,9 +62,6 @@ namespace TplQueue.Sample.Simulation.Runtime
 
             try
             {
-                // Composition identity is available even to synchronous enqueue observers.
-                // Retain it on submission failure: a queue may already have published events.
-                _graphs.Register(root);
                 switch (availableQueue)
                 {
                     case AvailableQueue.FIFO:

@@ -6,9 +6,6 @@ namespace TplQueue.Sample.Etl.Contracts
 {
     public interface ISampleJobFactory
     {
-        IDataJobRoot<IIngestMeasurementsPayload> IngestMeasurementsSigleJobRoot();
-        IDataJobRoot<ILoadMeasurementsPayload> LoadMeasurementsJobRoot();
-
         /// <summary>Creates an independent ingest root from a snapshot of supplied measurements.</summary>
         IDataJobRoot<IIngestMeasurementsPayload> IngestMeasurementsSigleJobRoot(
             IReadOnlyList<LegacyMeasurement> measurements);

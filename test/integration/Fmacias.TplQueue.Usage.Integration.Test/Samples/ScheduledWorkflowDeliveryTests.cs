@@ -171,7 +171,7 @@ public sealed class ScheduledWorkflowDeliveryTests
 
     private sealed class Workflow(ActiveRuntime runtime, IEnumerable<AvailableQueue> queues,
         bool failFirst = false, Action? beforeSubmit = null, int interval = 20)
-        : ScheduledWorkflow(runtime, queues, interval)
+        : ScheduledWorkflow(runtime, interval)
     {
         public ConcurrentQueue<AvailableQueue> Attempts { get; } = new();
         protected override string ScenarioId => "continuous-test";

@@ -34,12 +34,7 @@
   <ItemGroup>
     <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Composition\MeasurementEtlServiceCollectionExtensions.cs" Link="Samples\MeasurementEtlServiceCollectionExtensions.cs" />
     <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Application\SampleEtlDemoHostedService.cs" Link="Samples\SampleEtlDemoHostedService.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\JobMonitorSnapshot.cs" Link="Samples\JobMonitorSnapshot.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\EtlQueueObserver.cs" Link="Samples\EtlQueueObserver.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\EtlDashboardSnapshot.cs" Link="Samples\EtlDashboardSnapshot.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\EtlExecutionProjectionStore.cs" Link="Samples\EtlExecutionProjectionStore.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\EtlQueueCatalog.cs" Link="Samples\EtlQueueCatalog.cs" />
-    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Etl\IEtlExecutionProjectionStore.cs" Link="Samples\IEtlExecutionProjectionStore.cs" />
+    <Compile Include="..\..\..\samples\TplQueue.Sample.BlazorSignalR\Presentation\Monitoring\*.cs" Link="Samples\Monitoring\%(Filename)%(Extension)" />
   </ItemGroup>
 
 </Project>

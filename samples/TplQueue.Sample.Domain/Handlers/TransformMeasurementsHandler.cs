@@ -1,31 +1,23 @@
 using Microsoft.Extensions.Logging;
-using System;
 using System.Globalization;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
-using TplQueue.Sample.Domain.Payloads;
 using TplQueue.Sample.Etl.Contracts;
 
 namespace TplQueue.Sample.Domain.Handlers
 {
-    internal sealed class TransformMeasurementsHandler : PayloadHandler<TransformMeasurementsPayload>
+    internal sealed class TransformMeasurementsHandler : PayloadHandler<ITransformMeasurementsPayload>
     {
         private const int SampleExecutionDelayMilliseconds = 700;
         private readonly IEtlExecutionDataStore _store;
         private readonly ILogger<TransformMeasurementsHandler> _logger;
 
-        private TransformMeasurementsHandler(IEtlExecutionDataStore store, ILogger<TransformMeasurementsHandler> logger)
+        public TransformMeasurementsHandler(IEtlExecutionDataStore store, ILogger<TransformMeasurementsHandler> logger)
         {
             _store = store ?? throw new ArgumentNullException(nameof(store));
             _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
-        public static TransformMeasurementsHandler Create(IEtlExecutionDataStore store, ILogger<TransformMeasurementsHandler> logger)
-        {
-            return new TransformMeasurementsHandler(store, logger);
-        }
+
         protected override async Task HandleAsync(
-            TransformMeasurementsPayload payload,
+            ITransformMeasurementsPayload payload,
             CancellationToken cancellationToken)
         {
             // Keep the real sample operation visible long enough to inspect in the timeline.

@@ -5,5 +5,6 @@ namespace TplQueue.Sample.Etl.Contracts
 {
     public interface ITransformMeasurementsPayload: IPayload
     {
+        Guid EtlOperationId { get; }
     }
 }

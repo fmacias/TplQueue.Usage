@@ -1,12 +1,52 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Composition;
+using Fmacias.TplQueue.Core;
+using Fmacias.TplQueue.Microsoft.DependencyInjection;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using TplQueue.Sample.BlazorSignalR.Application;
+using TplQueue.Sample.BlazorSignalR.Composition;
+using TplQueue.Sample.Domain.Composition;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
 
 [TestFixture]
 public sealed class SimulationRegistrationTests
 {
+    [Test]
+    public void BlazorComposition_ValidatesAndResolvesFactoryWorkflowsAndHostedService()
+    {
+        // Arrange: use the same Domain, Simulation and monitoring registrations as Program.cs.
+        var configuration = new ConfigurationBuilder().Build();
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddTplQueue(configuration, CoreApi.Create());
+        services.AddSampleDomain();
+        services.AddSampleEtlWorkflow();
+        services.AddSampleSingleJobSimulation();
+        services.AddSampleMultipleFifoRootsSimulation();
+        services.AddMeasurementEtlConsumer(configuration);
+
+        // Act: validate constructor dependencies and lifetimes before resolving services.
+        using var provider = services.BuildServiceProvider(new ServiceProviderOptions
+        {
+            ValidateOnBuild = true,
+            ValidateScopes = true
+        });
+
+        // Assert: both job construction and cached-job rehydration can resolve their handlers.
+        Assert.DoesNotThrow(() => provider.RegisterSampleEtlPayloadHandlers());
+        Assert.Multiple(() =>
+        {
+            Assert.That(provider.GetRequiredService<ISampleJobFactory>(), Is.Not.Null);
+            Assert.That(provider.GetServices<ISimulationWorkflow>().Count(), Is.EqualTo(3));
+            Assert.That(provider.GetRequiredService<ISimulationService>(), Is.Not.Null);
+            Assert.That(provider.GetServices<IHostedService>().OfType<SampleEtlDemoHostedService>().Count(),
+                Is.EqualTo(1));
+        });
+    }
+
     [Test]
     public void WorkflowRegistration_IncludesGraphMembershipBeforeAnyOutcome()
     {

@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 using TplQueue.Sample.Simulation.Composition;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Domain.Composition;
-using TplQueue.Sample.Simulation.Runtime;
+using TplQueue.Sample.Simulation.Execution;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples
 {
@@ -150,7 +150,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             // Arrange
             using var provider = CreateServiceProvider(out var fifoProxy, out var parallelProxy, out var cacheProxy);
             var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
-            var root = provider.GetRequiredService<ISampleJobFactory>().IngestMeasurementsSigleJobRoot();
+            var root = provider.GetRequiredService<ISampleJobFactory>().IngestMeasurementsSigleJobRoot(new[] { new LegacyMeasurement("sensor-1", 77m, TemperatureUnit.Fahrenheit, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)) });
             var selected = queue == AvailableQueue.FIFO ? fifoProxy : queue == AvailableQueue.Parallel ? parallelProxy : cacheProxy;
             using var cancellation = new CancellationTokenSource();
             selected.BeforeEnqueue = () =>
@@ -182,7 +182,7 @@ namespace Fmacias.TplQueue.Integration.Test.Samples
             // Arrange
             using var provider = CreateServiceProvider(out var cacheProxy);
             var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
-            var root = provider.GetRequiredService<ISampleJobFactory>().IngestMeasurementsSigleJobRoot();
+            var root = provider.GetRequiredService<ISampleJobFactory>().IngestMeasurementsSigleJobRoot(new[] { new LegacyMeasurement("sensor-1", 77m, TemperatureUnit.Fahrenheit, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)) });
 
             // Act / Assert
             Assert.That(() => runtime.EnqueueFifo<IIngestMeasurementsPayload>(AvailableQueue.Cache, null!, CancellationToken.None),

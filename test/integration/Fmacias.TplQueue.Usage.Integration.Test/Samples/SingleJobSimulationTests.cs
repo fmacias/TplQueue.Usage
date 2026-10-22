@@ -1,17 +1,18 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using Fmacias.TplQueue.Contracts;
 using Fmacias.TplQueue.Core;
 using Fmacias.TplQueue.Defaults;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
+using TplQueue.Sample.BlazorSignalR.Presentation.Monitoring;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Composition;
 using TplQueue.Sample.Domain.Composition;
 using TplQueue.Sample.Domain.Handlers;
 using TplQueue.Sample.Domain.Payloads;
 using TplQueue.Sample.Simulation.Workflows.MultipleFifoRoots;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
 
@@ -70,7 +71,7 @@ public sealed class SingleJobSimulationTests
             Assert.That(delivery.SkippedTicks + delivery.FailedTicks, Is.Zero);
             Assert.That(context.Calls.Count, Is.EqualTo(6));
             Assert.That(context.Calls.Values, Is.All.EqualTo(1));
-            Assert.That(JobMonitorMapper.Map(context.Store.GetSnapshot()).Jobs, Has.Count.EqualTo(6));
+            Assert.That(context.Store.GetSnapshot().Events.Select(e => e.JobInfo.Id).Distinct().Count(), Is.EqualTo(6));
         });
     }
 
@@ -99,8 +100,9 @@ public sealed class SingleJobSimulationTests
                     .Select(e => e.JobInfo.Id).Distinct().Count() < 8 ||
                 context.Observer.Events.All(e => e.Status != JobEventStatus.Started || e.JobInfo.CrossQueueId != fifoId))
                 await Task.Delay(10, timeout.Token);
-            var backlog = JobMonitorMapper.Map(context.Store.GetSnapshot());
-            var fifoBacklog = backlog.Jobs.Where(job => job.QueueId == fifoId.ToString()).ToArray();
+            var backlog = context.Store.GetSnapshot();
+            var fifoBacklog = backlog.Events.Where(e => e.JobInfo.CrossQueueId == fifoId)
+                .GroupBy(e => e.JobInfo.Id).ToArray();
 
             // Assert: the existing runtime FIFO is also the observed queue, with independent memberships.
             Assert.Multiple(() =>
@@ -111,7 +113,7 @@ public sealed class SingleJobSimulationTests
                 Assert.That(delivery.FailedTicks, Is.Zero);
                 Assert.That(delivery.RootIds.All(runtime.IsActive), Is.True);
                 Assert.That(fifoBacklog.Length, Is.GreaterThanOrEqualTo(8));
-                Assert.That(fifoBacklog.Count(job => job.Channel == null && job.State == "waiting"),
+                Assert.That(fifoBacklog.Count(events => events.All(e => e.Status != JobEventStatus.Started)),
                     Is.EqualTo(fifoBacklog.Length - 1));
                 Assert.That(context.Observer.Events.Any(e => e.Status == JobEventStatus.RootSuccessed), Is.False);
                 foreach (var root in delivery.RootIds)
@@ -126,30 +128,34 @@ public sealed class SingleJobSimulationTests
                 context.Observer.Events.Where(e => e.Status == JobEventStatus.Started)
                     .Select(e => e.JobInfo.Id).Distinct().Count() < delivery.RootIds.Count)
                 await Task.Delay(10, timeout.Token);
-            var finished = JobMonitorMapper.Map(context.Store.GetSnapshot());
+            var finished = context.Store.GetSnapshot();
+            var finishedJobs = finished.Events.GroupBy(e => e.JobInfo.Id).ToArray();
 
             Assert.Multiple(() =>
             {
-                Assert.That(finished.Jobs, Has.Count.EqualTo(delivery.RootIds.Count));
+                Assert.That(finishedJobs, Has.Length.EqualTo(delivery.RootIds.Count));
                 foreach (var queue in context.Queues)
                 {
-                    var queueJobs = finished.Jobs.Where(job => job.QueueId == queue.QueueId.ToString()).ToArray();
-                    var queueRootIds = queueJobs.Select(job => Guid.Parse(job.Id)).ToHashSet();
+                    var queueJobs = finishedJobs.Where(events => events.First().JobInfo.CrossQueueId == queue.QueueId).ToArray();
+                    var queueRootIds = queueJobs.Select(events => events.Key).ToHashSet();
                     var submissionOrder = delivery.RootIds.Where(queueRootIds.Contains);
                     Assert.That(queueJobs.Length, Is.GreaterThanOrEqualTo(8));
                     Assert.That(execution.Where(item => queueRootIds.Contains(item.Root)),
                         Is.EqualTo(submissionOrder.SelectMany(id => new[] { (id, "start"), (id, "finish") })),
                         $"FIFO handler order must be preserved independently in {queue.Name}.");
-                    Assert.That(queueJobs.All(job => job.Channel >= 0 && job.Channel < queue.MaxParallelism), Is.True);
+                    Assert.That(queueJobs.All(events => events.Any(e => e.Status == JobEventStatus.Started &&
+                        e.ExecutionChannel >= 0 && e.ExecutionChannel < queue.MaxParallelism)), Is.True);
                 }
                 Assert.That(context.Calls.Values, Is.All.EqualTo(1));
                 Assert.That(context.Calls, Has.Count.EqualTo(delivery.RootIds.Count));
-                Assert.That(finished.Jobs.Where(job => job.QueueId == fifoId.ToString()).Select(job => job.Channel),
+                Assert.That(finished.Events.Where(e => e.JobInfo.CrossQueueId == fifoId && e.Status == JobEventStatus.Started)
+                        .Select(e => e.ExecutionChannel),
                     Is.All.EqualTo(0));
-                Assert.That(finished.Jobs.Select(job => job.State), Is.All.EqualTo("completed"));
-                Assert.That(finished.Jobs.All(job => job.EnqueuedAt.HasValue), Is.True);
-                foreach (var job in finished.Jobs)
-                    Assert.That(job.RootJobIds, Is.EqualTo(new[] { job.Id }),
+                Assert.That(finishedJobs.All(events => events.Any(e => e.Status == JobEventStatus.RootSuccessed)), Is.True);
+                Assert.That(finishedJobs.All(events => events.Any(e => e.Status is JobEventStatus.Cache or
+                    JobEventStatus.Enqueueing or JobEventStatus.Enqueued)), Is.True);
+                foreach (var job in finishedJobs)
+                    Assert.That(finished.RootJobIds[job.Key], Is.EqualTo(new[] { job.Key }),
                         "FIFO ordering edges must not merge composed root membership.");
                 Assert.That(simulation.GetSnapshot().Single().RootIds, Is.EqualTo(delivery.RootIds));
             });
@@ -223,7 +229,7 @@ public sealed class SingleJobSimulationTests
     {
         public ServiceProvider Provider { get; }
         public IQ[] Queues { get; }
-        public EtlExecutionProjectionStore Store { get; }
+        public JobMonitorStore Store { get; }
         public RecordingObserver Observer { get; }
         public ConcurrentDictionary<Guid, int> Calls { get; } = new();
         private readonly IDisposable _subscription;
@@ -247,19 +253,19 @@ public sealed class SingleJobSimulationTests
             services.AddTransient<ISystemTextJsonUniversalSerializer>(sp =>
                 sp.GetRequiredService<ISystemTextJsonSerializerFactory>().Serializer(new JsonSerializerOptions()));
             services.AddSampleDomain();
+            services.TryAddTransient<IngestMeasurementsHandler>();
+            var ingestHandler = services.BuildServiceProvider().GetRequiredService<IngestMeasurementsHandler>();
             if (multipleFifoRoots) services.AddSampleMultipleFifoRootsSimulation();
             else services.AddSampleSingleJobSimulation();
             Provider = services.BuildServiceProvider();
-            api.RegisterPayloadHandler(IngestMeasurementsPayload.HandlerId,
-                new CountingHandler(IngestMeasurementsHandler.Create(
-                    Provider.GetRequiredService<IEtlExecutionDataStore>(),
-                    NullLogger<IngestMeasurementsHandler>.Instance), Calls, release, execution));
+
+            api.RegisterPayloadHandler(IngestMeasurementsPayload.HandlerId, ingestHandler);
             var runtime = Provider.GetRequiredService<IEtlQueueRuntime>();
             Queues = Enum.GetValues<AvailableQueue>().Select(runtime.GetQueue).ToArray();
-            Store = new EtlExecutionProjectionStore(new EtlQueueCatalog(Queues.Select((q, i) =>
-                new EtlQueueDescriptor((AvailableQueue)i, q.QueueId, q.QueueId.ToString(), q.Name, i, q.MaxParallelism)).ToArray()),
-                NullLogger<EtlExecutionProjectionStore>.Instance, Provider.GetRequiredService<ISimulationGraphCatalog>());
-            Observer = new RecordingObserver(Store);
+            Store = new JobMonitorStore(new JobMonitorQueueCatalog(Queues.Select(q =>
+                new JobMonitorQueue(q.QueueId, q.QueueId.ToString(), q.Name, q.MaxParallelism)).ToArray()),
+                NullLogger<JobMonitorStore>.Instance, Provider.GetRequiredService<ISimulationGraphCatalog>());
+            Observer = new RecordingObserver(Store, api.ObserverFactory());
             _subscription = runtime.Subscribe(Observer);
             runtime.ResumePolling();
         }
@@ -302,7 +308,7 @@ public sealed class SingleJobSimulationTests
             inner.DataJob(record, payload, new CountingHandler(handler, calls, release, execution));
     }
 
-    private sealed class RecordingObserver(EtlExecutionProjectionStore store) : IObserver<IJobEvent>
+    private sealed class RecordingObserver(JobMonitorStore store, IObserverFactory factory) : IObserver<IJobEvent>
     {
         private readonly ConcurrentDictionary<Guid, TaskCompletionSource<bool>> _completed = new();
         public ConcurrentQueue<IJobEvent> Events { get; } = new();
@@ -313,7 +319,7 @@ public sealed class SingleJobSimulationTests
         {
             try
             {
-                store.Apply(value);
+                store.Apply(factory.CreateJobEventSnapshot(value));
                 Events.Enqueue(value);
                 if (value.Status == JobEventStatus.RootSuccessed) Source(value.JobInfo.Id).TrySetResult(true);
                 if (value.Status is JobEventStatus.Failed or JobEventStatus.Canceled)

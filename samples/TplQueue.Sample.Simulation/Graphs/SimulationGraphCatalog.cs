@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TplQueue.Sample.Etl.Contracts;
 
-namespace TplQueue.Sample.Simulation.Runtime
+namespace TplQueue.Sample.Simulation.Graphs
 {
     /// <summary>Retains only IDs from composed graphs for the lifetime of the simulation session.</summary>
     internal sealed class SimulationGraphCatalog : ISimulationGraphCatalog

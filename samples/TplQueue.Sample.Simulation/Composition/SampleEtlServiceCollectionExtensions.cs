@@ -3,11 +3,13 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using System;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Measurements;
-using TplQueue.Sample.Simulation.Runtime;
 using TplQueue.Sample.Simulation.Session;
 using TplQueue.Sample.Simulation.Workflows.Etl;
 using TplQueue.Sample.Simulation.Workflows.SingleJob;
 using TplQueue.Sample.Simulation.Workflows.MultipleFifoRoots;
+using TplQueue.Sample.Simulation.Graphs;
+using TplQueue.Sample.Simulation.Execution;
+using TplQueue.Sample.Simulation.Stores;
 
 namespace TplQueue.Sample.Simulation.Composition
 {
@@ -44,6 +46,7 @@ namespace TplQueue.Sample.Simulation.Composition
 
         private static void AddSimulationServices(IServiceCollection services)
         {
+            services.TryAddSingleton<IEtlExecutionDataStore, EtlExecutionDataStore>();
             services.TryAddSingleton<ISimulationGraphCatalog, SimulationGraphCatalog>();
             services.TryAddSingleton<IEtlQueueRuntime,EtlQueueRuntime>();
             services.TryAddSingleton<IMeasurementSource, SampleMeasurementSource>();

@@ -3,7 +3,8 @@ using System.Reflection;
 using Fmacias.TplQueue.Contracts;
 using Microsoft.Extensions.Logging.Abstractions;
 using TplQueue.Sample.Etl.Contracts;
-using TplQueue.Sample.Simulation.Runtime;
+using TplQueue.Sample.Simulation.Execution;
+using TplQueue.Sample.Simulation.Graphs;
 using TplQueue.Sample.Simulation.Workflows;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
@@ -116,7 +117,7 @@ public sealed class ScheduledWorkflowTests
         public IParallelQ InnerParallelQ { get; } = DispatchProxy.Create<IParallelQ, QueueSubscriptionProxy>();
         public ICacheQ InnerCacheQ { get; } = DispatchProxy.Create<ICacheQ, QueueSubscriptionProxy>();
         public EtlQueueRuntime CreateRuntime() => new(this, this, this,
-            NullLogger<EtlQueueRuntime>.Instance, new SimulationGraphCatalog());
+            NullLogger<EtlQueueRuntime>.Instance);
         public void Dispose() { }
     }
 }

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using TplQueue.Sample.Domain.Payloads;
 using TplQueue.Sample.Etl.Contracts;
 

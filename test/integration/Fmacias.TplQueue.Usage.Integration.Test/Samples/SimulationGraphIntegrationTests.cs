@@ -6,12 +6,11 @@ using Fmacias.TplQueue.Extensions;
 using global::Fmacias.TplQueue;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
-using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
+using TplQueue.Sample.BlazorSignalR.Presentation.Monitoring;
 using TplQueue.Sample.Etl.Contracts;
 using TplQueue.Sample.Simulation.Composition;
 using TplQueue.Sample.Domain.Composition;
 using TplQueue.Sample.Domain.Payloads;
-using TplQueue.Sample.Simulation.Runtime;
 
 namespace Fmacias.TplQueue.Integration.Test.Samples;
 
@@ -40,43 +39,47 @@ public sealed class SimulationGraphIntegrationTests
         provider.RegisterSampleEtlPayloadHandlers();
         var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
         var queue = runtime.GetQueue(AvailableQueue.Cache);
-        var store = new EtlExecutionProjectionStore(new EtlQueueCatalog(new[] {
-            new EtlQueueDescriptor(AvailableQueue.Cache, queue.QueueId, queue.QueueId.ToString(),
-                queue.Name, 0, queue.MaxParallelism) }), NullLogger<EtlExecutionProjectionStore>.Instance,
+        var store = new JobMonitorStore(new JobMonitorQueueCatalog(new[] {
+            new JobMonitorQueue(queue.QueueId, queue.QueueId.ToString(),
+                queue.Name, queue.MaxParallelism) }), NullLogger<JobMonitorStore>.Instance,
             provider.GetRequiredService<ISimulationGraphCatalog>());
         var factory = provider.GetRequiredService<ISampleJobFactory>();
-        var single = factory.IngestMeasurementsSigleJobRoot();
-        var etl = factory.LoadMeasurementsJobRoot();
+
+        var single = factory.IngestMeasurementsSigleJobRoot(new[] {
+            new LegacyMeasurement("test", 20m, TemperatureUnit.Celsius, DateTime.UtcNow) });
+
+        var etl = factory.LoadMeasurementsJobRoot(new[] {
+            new LegacyMeasurement("test", 20m, TemperatureUnit.Celsius, DateTime.UtcNow) });
+
         var transform = etl.Dependencies.Single();
+
         var ingest = transform.Dependencies.Single();
-        var observer = new GraphCompletionObserver(store, single.Id, etl.Id);
+        var observer = new GraphCompletionObserver(store, api.ObserverFactory(), single.Id, etl.Id);
         using var subscription = runtime.Subscribe(observer);
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
         Assert.That(single.Dependencies, Is.Empty);
 
-        // Act: exercise real persistence, hydration, observation and the renderer DTO boundary.
+        // Act: exercise real persistence, hydration and detached observation capture.
         runtime.ResumePolling();
         if (singleFirst) runtime.Enqueue(AvailableQueue.Cache, single, timeout.Token);
         runtime.Enqueue(AvailableQueue.Cache, etl, timeout.Token);
         if (!singleFirst) runtime.Enqueue(AvailableQueue.Cache, single, timeout.Token);
         await observer.Completion.Task.WaitAsync(timeout.Token);
-        var jobs = JobMonitorMapper.Map(store.GetSnapshot()).Jobs;
+        var snapshot = store.GetSnapshot();
+        var jobs = snapshot.Events.GroupBy(e => e.JobInfo.Id).ToArray();
 
         // Assert: four jobs form two graphs, with exactly the two ETL dependency edges.
-        Assert.That(jobs.Select(job => job.Id), Is.EquivalentTo(new[] {
-            single.Id.ToString(), etl.Id.ToString(), transform.Id.ToString(), ingest.Id.ToString() }));
-        Assert.That(jobs.Select(job => job.State), Is.All.EqualTo("completed"));
-        var standalone = jobs.Single(job => job.Id == single.Id.ToString());
-        Assert.That(standalone.IsRoot, Is.True);
-        Assert.That(standalone.RootJobIds, Is.EqualTo(new[] { single.Id.ToString() }));
-        Assert.That(standalone.DependsOn, Is.Empty);
-        Assert.That(jobs.Where(job => job.Id != single.Id.ToString()).Select(job => job.RootJobIds),
-            Is.All.EqualTo(new[] { etl.Id.ToString() }));
-        Assert.That(jobs.Single(job => job.Id == ingest.Id.ToString()).DependsOn, Is.Empty);
-        Assert.That(jobs.Single(job => job.Id == transform.Id.ToString()).DependsOn,
-            Is.EqualTo(new[] { ingest.Id.ToString() }));
-        Assert.That(jobs.Single(job => job.Id == etl.Id.ToString()).DependsOn,
-            Is.EqualTo(new[] { transform.Id.ToString() }));
+        Assert.That(jobs.Select(job => job.Key), Is.EquivalentTo(new[] { single.Id, etl.Id, transform.Id, ingest.Id }));
+        Assert.That(jobs.All(events => events.Any(e => e.Status is JobEventStatus.Successed or JobEventStatus.RootSuccessed)), Is.True);
+        Assert.That(snapshot.RootJobIds[single.Id], Is.EqualTo(new[] { single.Id }));
+        Assert.That(jobs.Single(job => job.Key == single.Id).SelectMany(e => e.JobInfo.Dependencies), Is.Empty);
+        Assert.That(jobs.Where(job => job.Key != single.Id).Select(job => snapshot.RootJobIds[job.Key]),
+            Is.All.EqualTo(new[] { etl.Id }));
+        Assert.That(jobs.Single(job => job.Key == ingest.Id).SelectMany(e => e.JobInfo.Dependencies), Is.Empty);
+        Assert.That(jobs.Single(job => job.Key == transform.Id).SelectMany(e => e.JobInfo.Dependencies).Select(d => d.Id).Distinct(),
+            Is.EqualTo(new[] { ingest.Id }));
+        Assert.That(jobs.Single(job => job.Key == etl.Id).SelectMany(e => e.JobInfo.Dependencies).Select(d => d.Id).Distinct(),
+            Is.EqualTo(new[] { transform.Id }));
     }
 
     [TestCase(AvailableQueue.FIFO, "completed")]
@@ -108,9 +111,9 @@ public sealed class SimulationGraphIntegrationTests
         var runtime = provider.GetRequiredService<IEtlQueueRuntime>();
         var graphs = provider.GetRequiredService<ISimulationGraphCatalog>();
         var queues = Enum.GetValues<AvailableQueue>().Select(runtime.GetQueue).ToArray();
-        var store = new EtlExecutionProjectionStore(new EtlQueueCatalog(queues.Select((q, i) =>
-            new EtlQueueDescriptor((AvailableQueue)i, q.QueueId, q.QueueId.ToString(), q.Name, i, q.MaxParallelism)).ToArray()),
-            NullLogger<EtlExecutionProjectionStore>.Instance, graphs);
+        var store = new JobMonitorStore(new JobMonitorQueueCatalog(queues.Select(q =>
+            new JobMonitorQueue(q.QueueId, q.QueueId.ToString(), q.Name, q.MaxParallelism)).ToArray()),
+            NullLogger<JobMonitorStore>.Instance, graphs);
         var payload = IngestMeasurementsPayload.Create(new[] {
             new LegacyMeasurement("test", 20m, TemperatureUnit.Celsius, DateTime.UtcNow) }, Guid.NewGuid());
         var handler = new GatedHandler(outcome);
@@ -118,7 +121,7 @@ public sealed class SimulationGraphIntegrationTests
         var child = api.DataJobFactory.DataJob(payload, handler, "prerequisite");
         var root = api.DataJobFactory.DataJobRoot(payload, handler, "root", () => NoRetryPolicy.Create());
         child.Then(root);
-        var observer = new ProjectionObserver(store, child.Id, root.Id);
+        var observer = new ProjectionObserver(store, api.ObserverFactory(), child.Id, root.Id);
         using var subscription = runtime.Subscribe(observer);
         using var cancellation = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
@@ -128,25 +131,27 @@ public sealed class SimulationGraphIntegrationTests
             runtime.ResumePolling();
             runtime.Enqueue(queue, root, cancellation.Token);
             await observer.Running.Task.WaitAsync(TimeSpan.FromSeconds(5));
-            var running = JobMonitorMapper.Map(store.GetSnapshot()).Jobs.Single(j => j.Id == child.Id.ToString());
-            Assert.That(running.RootJobIds, Is.EqualTo(new[] { root.Id.ToString() }));
-            Assert.That(running.State, Is.EqualTo("running"));
+            var running = store.GetSnapshot();
+            Assert.That(running.RootJobIds[child.Id], Is.EqualTo(new[] { root.Id }));
+            var started = running.Events.First(e => e.JobInfo.Id == child.Id && e.Status == JobEventStatus.Started);
             if (outcome == "cancelled") cancellation.Cancel();
             else handler.Release.TrySetResult(true);
             await observer.Terminal.Task.WaitAsync(TimeSpan.FromSeconds(5));
 
             // Assert: IDs survive hydrated objects and never rely on RootSuccessed for failures/cancellation.
-            var snapshot = JobMonitorMapper.Map(store.GetSnapshot());
-            Assert.That(snapshot.Jobs, Has.Count.EqualTo(2));
-            Assert.That(snapshot.Jobs.Select(j => j.RootJobIds), Is.All.EqualTo(new[] { root.Id.ToString() }));
-            Assert.That(snapshot.Jobs.Single(j => j.IsRoot).State, Is.EqualTo(outcome));
-            Assert.That(snapshot.Jobs.Single(j => j.IsRoot).DependsOn, Is.EqualTo(new[] { child.Id.ToString() }));
-            Assert.That(snapshot.Jobs.Single(j => j.Id == child.Id.ToString()).Channel, Is.EqualTo(running.Channel));
+            var snapshot = store.GetSnapshot();
+            Assert.That(snapshot.Events.Select(e => e.JobInfo.Id).Distinct().Count(), Is.EqualTo(2));
+            Assert.That(snapshot.RootJobIds.Values, Is.All.EqualTo(new[] { root.Id }));
+            var terminal = outcome switch {
+                "completed" => JobEventStatus.RootSuccessed, "failed" => JobEventStatus.Failed, _ => JobEventStatus.Canceled };
+            var rootEvent = snapshot.Events.Last(e => e.JobInfo.Id == root.Id && e.Status == terminal);
+            Assert.That(rootEvent.JobInfo.Dependencies.Select(d => d.Id), Is.EqualTo(new[] { child.Id }));
+            Assert.That(snapshot.Events, Does.Contain(started), "Bootstrap preserves the original channel-bearing start.");
         }
         finally { handler.Release.TrySetResult(true); cancellation.Cancel(); }
     }
 
-    private sealed class GraphCompletionObserver(EtlExecutionProjectionStore store, params Guid[] rootIds)
+    private sealed class GraphCompletionObserver(JobMonitorStore store, IObserverFactory factory, params Guid[] rootIds)
         : IObserver<IJobEvent>
     {
         private readonly HashSet<Guid> _remaining = new(rootIds);
@@ -159,7 +164,7 @@ public sealed class SimulationGraphIntegrationTests
             {
                 lock (_gate)
                 {
-                    store.Apply(value);
+                    store.Apply(factory.CreateJobEventSnapshot(value));
                     if (value.Status is JobEventStatus.Failed or JobEventStatus.Canceled)
                         Completion.TrySetException(new InvalidOperationException($"Unexpected {value.Status} for {value.JobInfo.Id}"));
                     if (value.Status == JobEventStatus.RootSuccessed && _remaining.Remove(value.JobInfo.Id)
@@ -183,7 +188,7 @@ public sealed class SimulationGraphIntegrationTests
         }
     }
 
-    private sealed class ProjectionObserver(EtlExecutionProjectionStore store, Guid childId, Guid rootId) : IObserver<IJobEvent>
+    private sealed class ProjectionObserver(JobMonitorStore store, IObserverFactory factory, Guid childId, Guid rootId) : IObserver<IJobEvent>
     {
         public TaskCompletionSource<bool> Running { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource<bool> Terminal { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -191,7 +196,7 @@ public sealed class SimulationGraphIntegrationTests
         {
             try
             {
-                store.Apply(value);
+                store.Apply(factory.CreateJobEventSnapshot(value));
                 if (value.JobInfo.Id == childId && value.Status == JobEventStatus.Started) Running.TrySetResult(true);
                 if (value.JobInfo.Id == rootId && value.Status is JobEventStatus.RootSuccessed or JobEventStatus.Failed or JobEventStatus.Canceled)
                     Terminal.TrySetResult(true);

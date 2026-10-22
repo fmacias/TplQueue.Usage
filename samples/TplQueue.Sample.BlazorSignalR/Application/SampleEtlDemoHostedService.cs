@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using TplQueue.Sample.BlazorSignalR.Presentation.Etl;
+using TplQueue.Sample.BlazorSignalR.Presentation.Monitoring;
 using TplQueue.Sample.Etl.Contracts;
 
 namespace TplQueue.Sample.BlazorSignalR.Application;
@@ -9,12 +9,12 @@ namespace TplQueue.Sample.BlazorSignalR.Application;
 internal sealed class SampleEtlDemoHostedService : BackgroundService
 {
     private readonly ISimulationService _simulation;
-    private readonly EtlQueueObserver _observer;
+    private readonly JobMonitorObserver _observer;
     private readonly ILogger<SampleEtlDemoHostedService> _logger;
 
     public SampleEtlDemoHostedService(
         ISimulationService simulation,
-        EtlQueueObserver observer,
+        JobMonitorObserver observer,
         ILogger<SampleEtlDemoHostedService> logger)
     {
         _simulation = simulation ?? throw new ArgumentNullException(nameof(simulation));

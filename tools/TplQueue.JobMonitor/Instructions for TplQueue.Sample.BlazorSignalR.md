@@ -287,7 +287,7 @@ Give the element an explicit height. Observe both host and viewport so delayed
 stylesheet loading does not leave stale geometry. The controller coalesces redraws,
 aborts listeners, disconnects ResizeObserver and cancels a pending one-shot redraw
 on disconnection. That redraw coalesces requests; it never reschedules itself.
-Reconnection must not duplicate handlers. Snapshots are materialized current state,
+Reconnection must not duplicate handlers. Renderer snapshots are materialized current state,
 not every lifecycle event. An append API needs a separate ordered contract and tests.
 
 ## 10. Demo and validation handoff
@@ -324,8 +324,9 @@ results, not a guarantee about future revisions or tests rerun for documentation
 
 ## 11. Remaining limits
 
-Production hosts must bound snapshots and retention. The finite sample does not
-implement durable history or continuous-stream retention. Observer delivery is
+Production hosts must bound snapshots and retention. The continuous sample bounds
+monitor observation count with whole-job eviction. It does not implement durable
+history, snapshot byte limits or coordinated graph/business-data retention. Observer delivery is
 asynchronous/best-effort; missing Started data can leave a job Unassigned. Equal
 timestamps and finite display resolution still need groups. Native hover tooltips,
 large groups/counts and graph crossings need practical UX evaluation. Touch-specific

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using TplQueue.Sample.Etl.Contracts;
 
-namespace TplQueue.Sample.Domain.Stores
+namespace TplQueue.Sample.Simulation.Stores
 {
     /// <summary>
     /// Holds only the business data passed between steps of an ETL execution.

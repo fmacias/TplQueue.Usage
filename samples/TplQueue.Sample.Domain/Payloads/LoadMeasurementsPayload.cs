@@ -1,5 +1,4 @@
-﻿using System;
-using TplQueue.Sample.Etl.Contracts;
+﻿using TplQueue.Sample.Etl.Contracts;
 
 namespace TplQueue.Sample.Domain.Payloads
 {

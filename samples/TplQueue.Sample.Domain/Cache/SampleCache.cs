@@ -1,8 +1,4 @@
 ﻿using Fmacias.TplQueue.Contracts;
-using System;
-using System.Collections.Generic;
-using System.Dynamic;
-using System.Text;
 using TplQueue.Sample.Etl.Contracts;
 
 namespace TplQueue.Sample.Domain.Cache

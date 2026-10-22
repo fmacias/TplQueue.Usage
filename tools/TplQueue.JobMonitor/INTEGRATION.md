@@ -1,9 +1,9 @@
 # Integration into `TplQueue.Sample.BlazorSignalR`
 
-This is the integration and maintenance runbook for Usage commits `ac680c2` and
-`931d6f0`, updated September 22, 2026 for event-driven refresh. Integration is implemented. Preserve these
-decisions rather than repeating the original exploratory choice of channels,
-frontend framework or asset-copy mechanism.
+This runbook describes the current observation-stream integration. Earlier UI
+decisions originate in Usage commits `ac680c2` and `931d6f0`; snapshot transport and
+retention were refactored for Usage issue #1. Preserve the current channel,
+frontend and asset-copy semantics when modifying this integration.
 
 The [sample architecture guide](../../docs/architecture/blazor-consumer-sample.md)
 owns overall architecture and repository boundaries. The [adopted frontend instructions](<Instructions for TplQueue.Sample.BlazorSignalR.md>)
@@ -23,32 +23,34 @@ Paths below are relative to Usage:
 
 | Path | Responsibility |
 | --- | --- |
-| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/EtlQueueCatalog.cs` | Queue identity/capacity from configured queue instances. |
-| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/EtlExecutionProjectionStore.cs` | Thread-safe materialization, deduplication and late-event handling. |
-| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/EtlDashboardSnapshot.cs` | Detached C# snapshot, including channel and ChannelStartedAt. |
-| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Etl/JobMonitorSnapshot.cs` | Browser DTOs and semantic mapper. |
-| `samples/TplQueue.Sample.BlazorSignalR/Components/Pages/Dashboard.razor` | Projection subscription, InvokeAsync dispatch and snapshot mapping. |
+| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Monitoring/JobMonitorObserver.cs` | Synchronous one-to-one capture through Adapter's snapshot factory. |
+| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Monitoring/JobMonitorQueueCatalog.cs` | Detached queue identity/capacity from configured queue instances. |
+| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Monitoring/JobMonitorStore.cs` | Thread-safe occurrence retention and whole-job eviction. |
+| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Monitoring/JobMonitorSnapshot.cs` | Retained observations with queue and membership metadata. |
+| `samples/TplQueue.Sample.BlazorSignalR/Presentation/Monitoring/JobMonitorJson.cs` | JSON encoding with depth sufficient for nested job graphs. |
+| `tools/TplQueue.JobMonitor/src/event-stream.js` | Pure current-state/timeline projection from retained snapshots. |
+| `samples/TplQueue.Sample.BlazorSignalR/Components/Pages/Dashboard.razor` | Store subscription, InvokeAsync dispatch and accessible totals. |
 | `samples/TplQueue.Sample.BlazorSignalR/Components/JobMonitor.razor` | Serialized JS initialization, updates and disposal. |
 | `tools/TplQueue.JobMonitor/integrations/blazor/job-monitor.js` | Idempotent selection subscription and snapshot bridge. |
 | `samples/TplQueue.Sample.BlazorSignalR/TplQueue.Sample.BlazorSignalR.csproj` | Shared asset synchronization for build/publish. |
-| `test/integration/Fmacias.TplQueue.Usage.Integration.Test/Samples/EtlExecutionProjectionStoreTests.cs` | Projection, mapper and contract regressions. |
+| `test/integration/Fmacias.TplQueue.Usage.Integration.Test/Samples/JobMonitor*Tests.cs` | Capture, retention and transport regressions. |
+| `tools/TplQueue.JobMonitor/tests/event-stream.test.js` | Lifecycle/channel/graph projection regressions. |
 
 The actual direction is:
 
 ```text
-immutable runtime lifecycle events
-  -> EtlQueueObserver
-  -> thread-safe EtlExecutionProjectionStore
-  -> detached EtlDashboardSnapshot
-  -> JobMonitorMapper -> JobMonitorSnapshot
+IJobEvent -> JobMonitorObserver -> JobEventSnapshot
+  -> JobMonitorStore -> JobMonitorSnapshot retained window
   -> Dashboard / JobMonitor Razor wrapper
-  -> JS bridge -> job-queue-timeline.setData(snapshot)
+  -> JS bridge -> projectEventStream -> job-queue-timeline.setData
 ```
 
 Do not send live jobs, IJobEvent, payload graphs, queue instances, schedulers,
-exceptions or synchronization objects across JS interop. C# owns runtime behavior;
-the browser owns view state. DTOs are handwritten and require semantic review;
-they are not generated from an authoritative API schema.
+exceptions or synchronization objects across JS interop. The store accepts immutable
+snapshots and preserves each callback occurrence; equal metadata is not evidence of
+a duplicate. `JobMonitorJob`, `EtlDashboardSnapshot` and `JobMonitorMapper` are removed.
+Original snapshot diagnostics travel as metadata but are omitted from the renderer
+model. C# owns runtime behavior; the browser owns view state and timeline projection.
 
 The Simulation module registers graph membership before enqueue and exposes it
 through `ISimulationGraphCatalog`. The projection joins that composition metadata
@@ -100,10 +102,11 @@ onto enqueue time made sequential jobs appear simultaneous in one lane.
 `StartedAt` and `ChannelStartedAt` intentionally differ. Do not use the broader
 lifecycle baseline as channel-acquisition time.
 
-Preserve the sequence in `Apply`:
+The store validates queue/channel identity before appending. The JavaScript
+projection independently validates transport input and applies these rules:
 
 1. Validate channel range against the queue before mutating state.
-2. Deduplicate event fingerprints, including channel metadata, under the store lock.
+2. Replay each retained occurrence in arrival order without changing or deduplicating the input.
 3. Accept non-null channel metadata at least as recent as the stored channel
    observation until a terminal job has a captured channel. Later observations
    cannot relocate that terminal identity to another channel. Late null-channel
@@ -114,8 +117,8 @@ Preserve the sequence in `Apply`:
 6. Preserve lifecycle precedence: delayed Started corrects placement without
    regressing terminal state to running. Same-rank events use timestamps; retry
    count retains the maximum observed value.
-7. Return detached snapshots and notify outside the lock, isolating subscriber
-   failures. No observer notification invokes JavaScript directly.
+7. Return renderer state separately from event history. The C# store notifies outside
+   its lock and isolates subscriber failures; no observer notification calls JavaScript.
 
 Mapper rule:
 
@@ -153,8 +156,19 @@ supply the same semantics.
 
 ## 4. Presentation DTO contract
 
-The C# JobMonitorSnapshot has Queues and Jobs, serialized to camelCase by Blazor
-interop. A representative assigned job is:
+The C# `JobMonitorSnapshot` has `Queues`, `Events`, `RootJobIds`, `Revision` and
+`DroppedEventCount`, serialized to camelCase by Blazor. Events are the original
+`JobEventSnapshot` objects, with numeric `JobEventStatus` values under default JSON
+settings. The event projection also accepts enum names. Queues add `queueId` for
+the runtime GUID alongside their stable display ID. Root membership is a dictionary
+from job GUID to root GUID array. No intermediate per-job C# DTO is serialized.
+`JobMonitorJson` encodes this envelope as a JSON string before interop, with a
+maximum JSON depth of 2048. This accommodates nested job dependency metadata beyond
+the default interop serialization depth without flattening it. The JS bridge parses
+the string and also accepts an already-decoded object from another transport.
+
+`projectEventStream` derives the existing renderer contract. A representative
+assigned renderer job (not the C# transport) is:
 
 ```json
 {
@@ -190,8 +204,9 @@ interop. A representative assigned job is:
 The example uses readable IDs; the sample emits Guid strings and its Razor callback
 accepts Guids. Description is empty because the observer contract supplies none.
 Duration is nonnegative EndedAt minus lifecycle StartedAt if both exist, otherwise
-null. It is not measured handler CPU duration. Error summaries stay available to
-C# consumers; raw errors/payloads do not enter this DTO.
+null. It is not measured handler CPU duration. Snapshot diagnostics remain available
+on the transport but are omitted from the renderer model. Raw errors/payloads are
+never retained.
 
 JS also accepts optional top-level `referenceTime`, an ISO timestamp with timezone.
 Supplying it to setData calls setReferenceTime and enters history mode. The C# DTO
@@ -257,15 +272,16 @@ times reduce grouping but cannot give every execution a separate point at every 
 
 ## 6. Razor and JS lifecycle
 
-Dashboard subscribes to ProjectionStore.Changed, builds its initial snapshot,
+Dashboard subscribes to MonitorStore.Changed, builds its initial retained window,
 and uses InvokeAsync for refreshes. An interlocked pending flag coalesces updates.
 Disposal marks the page disposed and unsubscribes. The singleton store owns runtime
 facts; each circuit owns selection and presentation state.
 
 After that initial load, only new accepted observer events request a data update.
-Deduplicated or rejected observations do not notify the view. Coalescing may send
-one snapshot for several observations, preserving the latest accumulated state.
-The DTOs represent that materialized state, not one DTO per runtime event.
+Rejected observations do not notify the view. Equal-valued observations do notify
+and remain distinct. Coalescing sends a complete retained window for several
+notifications, preserving each occurrence still within retention. Subscribing before
+bootstrap avoids a snapshot/subscribe gap. Late circuits receive the same history.
 
 JobMonitor.razor renders an ElementReference-backed custom element. OnAfterRenderAsync
 imports `./job-monitor/integrations/blazor/job-monitor.js`, creates one
@@ -354,7 +370,7 @@ From tools/TplQueue.JobMonitor:
 
 ```powershell
 node scripts/check.mjs
-node --test tests/layout.test.js tests/inspection.test.js
+node --test tests/*.test.js
 node demo/server.mjs
 ```
 
@@ -415,8 +431,15 @@ not run. Collected coverage is not a claim that the baseline gate passed.
 | Headless output remains Running | Check the 4178 barrier server and wait for data-result. |
 | IJobExecutionEvent does not resolve | Use coordinated source references or a compatible package version. |
 
-This is materialized state, not durable replay. The finite sample's projection and
-event-deduplication set need retention limits for continuous streams. Observer
+This is bounded observation history with a separate current-state projection, not
+durable replay. `JobMonitor:MaximumEvents` (default 20,000) evicts whole jobs in
+first-observed order, even if active. A single oversized job is also evicted;
+later observations can introduce it again with only retained facts. This keeps
+enqueue/start anchors together for surviving jobs and bounds every monitor index.
+Expired counts are visible on the page. There is no fingerprint set. Full windows
+are still sent on updates; incremental transport is a future optimization.
+Individual nested snapshot graphs are not byte-bounded, and Simulation graph/business
+retention remains separate work. Observer
 delivery is asynchronous/best-effort; WaitAsync does not wait for observers or
 cache acknowledgment. The sample memory cache is not a durable spool. Missing
 observations, millisecond resolution, large graphs and connector crossings remain

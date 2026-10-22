@@ -17,8 +17,8 @@ The host attaches observers before starting delivery. **Stop arrivals** closes
 admission across browser tabs and waits for pending submissions while accepted
 jobs finish. Host shutdown cancels the token used by jobs. Refreshing the page
 does not restart delivery; restart the server for another session. Pause freezes
-the view only. History, graph membership and business data remain in memory for
-the process lifetime; bounded retention is still future work.
+the view only. Monitor observations have configurable bounded retention; graph
+membership and business data still remain in memory for the process lifetime.
 
 See the [delivery contract](../../docs/architecture/blazor-consumer-sample.md#continuous-combined-demo).
 
@@ -37,13 +37,26 @@ failed and cancelled graphs. Shared prerequisites retain one job ID and all root
 memberships. Selection emphasizes the connected dependency graph; root identity
 never supplies a channel or changes observed lifecycle facts.
 
-After the initial snapshot, new accepted `IJobEvent` observations trigger projection
-notifications and coalesced updates through the Blazor circuit. Duplicate events
-do not trigger another update. The standalone monitor has no refresh interval:
+`JobMonitorObserver` captures each `IJobEvent` synchronously through the Adapter
+factory and forwards only `JobEventSnapshot` to `JobMonitorStore`. The store retains
+each occurrence, including repeated statuses or identical metadata. After the
+initial retained window, observations trigger coalesced updates through the Blazor
+circuit. The standalone monitor has no refresh interval:
 live time advances on snapshot arrival and stays still when idle. Pause/history
 keeps the chosen reference while incoming snapshots update job state. Selection,
 zoom and resizing still redraw locally; selection callbacks do not resend the
-unchanged snapshot. DTOs represent accumulated job state derived from events.
+unchanged snapshot. The bridge passes the original snapshots to `event-stream.js`,
+which derives current positions separately from event history. Queue capacity and
+composed memberships are supplementary metadata; no runtime objects are retained.
+
+Configure `JobMonitor:MaximumEvents` in `appsettings.json` (default 20,000).
+When exceeded, the store removes entire jobs in first-observed order, including
+active jobs if necessary. An individual job exceeding the limit is also evicted;
+a later occurrence can introduce it again with only then-retained facts. The page
+reports expired observations. Surviving histories keep their original enqueue/start
+events, and late browsers receive the same retained window. This bounds event
+count, not the size of nested metadata or the Simulation catalog/business stores.
+Updates currently replace the bounded window rather than using a delta protocol.
 
 Expand **U** to inspect enqueue history. Searching for a job also expands its strip
 and navigates to its execution time. Search or history navigation reveals older

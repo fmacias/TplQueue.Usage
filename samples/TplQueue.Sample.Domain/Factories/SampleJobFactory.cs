@@ -1,8 +1,5 @@
 ﻿using Fmacias.TplQueue.Contracts;
 using Fmacias.TplQueue.Extensions;
-using Microsoft.Extensions.Logging;
-using System;
-using System.Collections.Generic;
 using System.Security.Cryptography;
 using TplQueue.Sample.Domain.Handlers;
 using TplQueue.Sample.Domain.Payloads;
@@ -15,26 +12,23 @@ namespace TplQueue.Sample.Domain.Factories
         private readonly IDataJobFactory _dataJobFactory;
         private readonly IRetryPolicyAbstractFactory _retryPolicyAbstractFactory;
         private readonly IEtlExecutionDataStore _store;
-        private readonly ILogger<IngestMeasurementsHandler> _ingestLogger;
-        private readonly ILogger<TransformMeasurementsHandler> _transformLogger;
-        private readonly ILogger<LoadMeasurementsHandler> _loadLogger;
+        private readonly IngestMeasurementsHandler _ingestHandler;
+        private readonly TransformMeasurementsHandler _transformHandler;
+        private readonly LoadMeasurementsHandler _loadHandler;
         public SampleJobFactory(IDataJobFactory dataJobFactory,
             IRetryPolicyAbstractFactory retryPolicyAbstractFactory,
             IEtlExecutionDataStore etlExecutionDataStore,
-            ILogger<IngestMeasurementsHandler> ingestLogger,
-            ILogger<TransformMeasurementsHandler> transformLogger,
-            ILogger<LoadMeasurementsHandler> loadLogger)
+            IngestMeasurementsHandler ingestHandler,
+            TransformMeasurementsHandler transformHandler,
+            LoadMeasurementsHandler loadHandler)
         {
             _dataJobFactory = dataJobFactory ?? throw new ArgumentNullException(nameof(dataJobFactory));
             _retryPolicyAbstractFactory = retryPolicyAbstractFactory ?? throw new ArgumentNullException(nameof(retryPolicyAbstractFactory));
             _store = etlExecutionDataStore ?? throw new ArgumentNullException(nameof(etlExecutionDataStore));
-            _ingestLogger = ingestLogger ?? throw new ArgumentNullException(nameof(ingestLogger));
-            _transformLogger = transformLogger ?? throw new ArgumentNullException(nameof(transformLogger));
-            _loadLogger = loadLogger ?? throw new ArgumentNullException(nameof(loadLogger));
+            _ingestHandler = ingestHandler;
+            _transformHandler = transformHandler;
+            _loadHandler = loadHandler;
         }
-
-        public IDataJobRoot<ILoadMeasurementsPayload> LoadMeasurementsJobRoot()
-            => LoadMeasurementsJobRoot(LegacyMeasurements(DateTime.UtcNow));
 
         /// <summary>Builds the fixed ETL graph without replacing caller-supplied measurements.</summary>
         public IDataJobRoot<ILoadMeasurementsPayload> LoadMeasurementsJobRoot(
@@ -51,9 +45,6 @@ namespace TplQueue.Sample.Domain.Factories
             return ingest.Then(transform).Then(load);
         }
 
-        public IDataJobRoot<IIngestMeasurementsPayload> IngestMeasurementsSigleJobRoot()
-            => IngestMeasurementsSigleJobRoot(LegacyMeasurements(DateTime.UtcNow));
-
         /// <summary>Uses the root identity as the operation identity for a single ingest job.</summary>
         public IDataJobRoot<IIngestMeasurementsPayload> IngestMeasurementsSigleJobRoot(
             IReadOnlyList<LegacyMeasurement> measurements)
@@ -67,10 +58,8 @@ namespace TplQueue.Sample.Domain.Factories
         {
             return _dataJobFactory.DataJobRoot<ILoadMeasurementsPayload>(
                             etlOperationId,
-                            LoadMeasurementsPayload.Create(
-                                collectionTime,
-                                etlOperationId),
-                            LoadMeasurementsHandler.Create(_store, _loadLogger),
+                            LoadMeasurementsPayload.Create(collectionTime, etlOperationId),
+                            _loadHandler,
                             "Load measurement summary",
                             () => _retryPolicyAbstractFactory.GetPolicy<IExponentialBackoff>());
         }
@@ -79,46 +68,21 @@ namespace TplQueue.Sample.Domain.Factories
         {
             return _dataJobFactory.DataJob<ITransformMeasurementsPayload>(
                 TransformMeasurementsPayload.Create(collectionTime, etlOperationId),
-                TransformMeasurementsHandler.Create(_store, _transformLogger),
+                _transformHandler,
                 "Transform measurements");
         }
 
         private IDataJob<IIngestMeasurementsPayload> GetIngest(IIngestMeasurementsPayload ingestPayload)
         {
-            return _dataJobFactory.DataJob(
-                            ingestPayload,
-                            IngestMeasurementsHandler.Create(_store, _ingestLogger),
-                            "Ingest measurements");
+            return _dataJobFactory.DataJob(ingestPayload,_ingestHandler,"Ingest measurements");
         }
         private IDataJobRoot<IIngestMeasurementsPayload> GetSingleIngest(IngestMeasurementsPayload ingestPayload)
         {
             return _dataJobFactory.DataJobRoot<IIngestMeasurementsPayload>(
                             ingestPayload.EtlOperationId,
                             ingestPayload,
-                            IngestMeasurementsHandler.Create(_store, _ingestLogger),
+                            _ingestHandler,
                             "Single job: ingest measurements");
-        }
-
-        private static LegacyMeasurement[] LegacyMeasurements(DateTime collectedAt)
-        {
-            return new[]
-            {
-                new LegacyMeasurement(
-                    "boiler-outlet",
-                    GenerateRandomDecimal(10.0,100.0),
-                    TemperatureUnit.Celsius,
-                    collectedAt.AddSeconds(-3)),
-                new LegacyMeasurement(
-                    "warehouse-zone-a",
-                    GenerateRandomDecimal(10.0,100.0),
-                    TemperatureUnit.Fahrenheit,
-                    collectedAt.AddSeconds(-2)),
-                new LegacyMeasurement(
-                    "warehouse-zone-b",
-                    GenerateRandomDecimal(10.0,100.0),
-                    TemperatureUnit.Celsius,
-                    collectedAt.AddSeconds(-1))
-            };
         }
 
         /// <summary>

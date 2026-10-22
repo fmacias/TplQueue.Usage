@@ -5,7 +5,7 @@ skinparam componentStyle rectangle
 skinparam shadowing false
 
 package "TplQueue.Usage — sample source projects" {
-  component "TplQueue.Sample.BlazorSignalR\nnet8.0\nHost / composition\nObserver projection / presentation" as Host
+  component "TplQueue.Sample.BlazorSignalR\nnet8.0\nHost / composition\nSnapshot capture / bounded retention" as Host
   component "TplQueue.Sample.Domain\nnetstandard2.0\nJob / graph factories, payloads, handlers\nBusiness store, queue / cache wrappers" as Domain
   component "TplQueue.Sample.Etl.Contracts\nnetstandard2.0\nShared sample interfaces and DTOs" as Contracts
   component "TplQueue.Sample.Simulation\nnetstandard2.0\nWorkflows / scheduled admission\nSession, queue runtime, graph catalog" as Simulation
@@ -40,7 +40,7 @@ Host ..> Simulation : Subscribe observer, then Start\nStopAsync on host shutdown
 Simulation ..> Domain : DI implementations via Contracts\nISampleJobFactory and queue wrappers
 Simulation ..> Host : IJobEvent from runtime-owned queues\nMembership via ISimulationGraphCatalog
 Assets ..> Host : MSBuild synchronizes assets\ninto ignored wwwroot/job-monitor
-Host ..> Browser : Blazor Interactive Server circuit\nDetached JobMonitorSnapshot via JS interop
+Host ..> Browser : Blazor Interactive Server circuit\nJobEventSnapshot window + queue/membership metadata
 Browser ..> Host : Selection callback / Stop arrivals control
 
 note bottom of Simulation
@@ -58,7 +58,8 @@ note bottom of Contracts
 end note
 
 note bottom of Browser
-  Initial snapshot, then observer-driven updates.
+  Initial retained window, then observer-driven updates.
+  event-stream.js derives current renderer positions.
   No custom application hub, REST API or polling.
   Browsers do not start or own workloads.
 end note

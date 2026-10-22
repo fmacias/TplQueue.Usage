@@ -1,4 +1,5 @@
 import '../../src/job-queue-timeline.js';
+import { projectEventStream } from '../../src/event-stream.js';
 const connections = new WeakMap();
 export function attach(element, callback) {
   detach(element);
@@ -11,7 +12,12 @@ export function attach(element, callback) {
   element.addEventListener('job-select', connection.listener);
   connections.set(element, connection);
 }
-export function update(element, snapshot) { if (connections.has(element)) element.setData(snapshot); }
+export function update(element, snapshot) {
+  if (connections.has(element)) {
+    const observations = typeof snapshot === 'string' ? JSON.parse(snapshot) : snapshot;
+    element.setData(projectEventStream(observations));
+  }
+}
 export function detach(element) {
   const connection = connections.get(element);
   if (!connection) return;

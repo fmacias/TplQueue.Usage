@@ -1,7 +1,4 @@
 using Fmacias.TplQueue.Contracts;
-using System;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace TplQueue.Sample.Domain.Handlers
 {
